@@ -103,6 +103,7 @@ class SessionManager:
     def __init__(self):
         self.sessions={} #字典：保存用户名和对应的用户对象
         self.storage_file=STORAGE_LIFE
+        self.load_to_save() #启动时从文件中加载用户会话
 
     def get_or_create(self,username):
         """创建或获取用户会话"""
@@ -147,11 +148,34 @@ class SessionManager:
         except Exception as e:
             print(f"会话记录加载失败：{e}")
 
+    def clear_history(self,username):
+        """清空指定用户的对话历史"""
+        if username in self.sessions:
+            self.sessions[username].clear_history()
+            #持久化保存
+            self.save_to_file()
+            return True
+        return False
+
+    def list_users(self):
+        """统计所有用户信息"""
+        return{
+            "total_users":len(self.sessions),
+            "users":self.sessions
+        }
+
 class ChatMultiUser:
 
     def __init__(self):
         self.session_manager=SessionManager()
-        self.session_manager.load_to_save()
+
+    def show_user(self):
+        """显示统计信息"""
+        users_info=self.session_manager.list_users()
+        print(f"\n统计信息：")
+        print(f"总用户数：{users_info['total_users']}")
+        if users_info['users']:
+            print(f"用户列表：{','.join(users_info['users'])}")
 
     def chat(self,username,prompt):
         """
@@ -228,6 +252,8 @@ def main():
     print("命令说明：")
     print("/login <用户名> -登陆/切换用户")
     print("/logout        -退出当前登陆")
+    print("/clear         -清空当前用户的对话历史")
+    print("/users         -显示所有用户的统计信息")
     print("/exit          -退出程序")
     print()
 
@@ -253,6 +279,18 @@ def main():
             elif user_input=="/logout":
                 current_user=None
                 print("已退出登陆")
+                continue
+            elif user_input=="/users":
+                chat.show_user()
+                continue
+            elif user_input=="/clear":
+                if current_user:
+                    if chat.session_manager.clear_history(current_user):
+                        print(f"已清空{current_user}的对话历史")
+                    else:
+                        print(f"用户{current_user}没有对话历史")
+                else:
+                    print("请先使用 /login 进行登陆")
                 continue
 
             #未登录处理
