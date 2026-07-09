@@ -1,0 +1,8 @@
+#DashScope SDK API客户端
+dashscope>=1.14.0
+
+#用于从.env中获取环境配置的工具库
+python-dotenv>=1.0.0
+
+#下载依赖倒当前项目命令
+#python -X utf8 -m pip install -r requirements.txt
