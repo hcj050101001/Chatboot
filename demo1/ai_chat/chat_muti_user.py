@@ -3,6 +3,7 @@
 持久化存储对话内容
 基于chat.py进行改造
 """
+import json
 import os
 import uuid
 from datetime import datetime
@@ -24,7 +25,7 @@ DEFAULT_MODEL=os.getenv("DEFAULT_MODEL")
 #工具的回答 Tool_Message
 
 #设置System_Message
-SYSTEM_MESSAGE="你是个美女"
+SYSTEM_MESSAGE="你是一个AI助手"
 
 #持久化存储用户对话记忆的文件名称路径
 STORAGE_LIFE="session.json"
@@ -82,7 +83,7 @@ class Session:
             "session_id":self.session_id,
             "create_at":self.created_at.isoformat(), #时间日期对象转换为字符串
             "last_active":self.last_active.isoformat(),
-            "chat_history":self.session_id
+            "chat_history":self.chat_history
         }
 
 class SessionManager:
@@ -90,6 +91,7 @@ class SessionManager:
 
     def __init__(self):
         self.sessions={} #字典：保存用户名和对应的用户对象
+        self.storage_file=STORAGE_LIFE
 
     def get_or_create(self,username):
         """创建或获取用户会话"""
@@ -101,6 +103,20 @@ class SessionManager:
         self.sessions[username].last_active=datetime.now()
 
         return self.sessions[username]
+
+    def save_to_file(self):
+        """保存会话信息到文件（持久化）"""
+        try:
+            data={}
+
+            for username,session in self.sessions.items():
+                data[username]=session.to_dict()
+
+            with open(self.storage_file,"w",encoding="utf-8") as f:
+                json.dump(data,f,ensure_ascii=False,indent=2) #indent=2 格式化缩进
+
+        except Exception as e:
+            print(f"持久化保存会话失败:{e}")
 
 class ChatMultiUser:
 
@@ -151,6 +167,8 @@ class ChatMultiUser:
                 session.add_chat_history("assistant", full_answer)
             else:
                 print("未收到可用的模型回复内容")
+
+            self.session_manager.save_to_file()
         except Exception as e:
             print(f"请求失败：{str(e)}")
 
