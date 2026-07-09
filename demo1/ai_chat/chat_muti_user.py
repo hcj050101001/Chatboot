@@ -86,6 +86,17 @@ class Session:
             "chat_history":self.chat_history
         }
 
+    @classmethod
+    def from_dict(cls,data):
+        """将文件中读取到的内容转换为Session对象"""
+        session=cls(data["username"])
+        session.session_id=data["session_id"]
+        session.created_at = datetime.fromisoformat(data["create_at"])
+        session.last_active = datetime.fromisoformat(data["last_active"])
+        session.chat_history = data["chat_history"]
+
+        return session
+
 class SessionManager:
     """会话管理器，管理所有用户会话"""
 
@@ -118,10 +129,29 @@ class SessionManager:
         except Exception as e:
             print(f"持久化保存会话失败:{e}")
 
+    def load_to_save(self):
+        """从文件中加载json信息"""
+        if not os.path.exists(self.storage_file):
+            return
+
+        try:
+            with open(self.storage_file,"r",encoding="utf-8") as f:
+                data=json.load(f)
+
+            for username,session_data in data.items():
+                self.sessions[username]=Session.from_dict(session_data)
+
+            if self.sessions:
+                print(f"已加载{len(self.sessions)}个用户的会话记录")
+
+        except Exception as e:
+            print(f"会话记录加载失败：{e}")
+
 class ChatMultiUser:
 
     def __init__(self):
         self.session_manager=SessionManager()
+        self.session_manager.load_to_save()
 
     def chat(self,username,prompt):
         """
