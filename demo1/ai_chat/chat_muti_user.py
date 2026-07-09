@@ -75,6 +75,16 @@ class Session:
             {"role": "system", "content": SYSTEM_MESSAGE}
         ]
 
+    def to_dict(self):
+        """将对象转换成可以序列化保存的格式"""
+        return{
+            "username":self.username,
+            "session_id":self.session_id,
+            "create_at":self.created_at.isoformat(), #时间日期对象转换为字符串
+            "last_active":self.last_active.isoformat(),
+            "chat_history":self.session_id
+        }
+
 class SessionManager:
     """会话管理器，管理所有用户会话"""
 
