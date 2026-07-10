@@ -6,20 +6,32 @@ import json
 import uvicorn
 from fastapi import FastAPI,Request
 from fastapi.responses import StreamingResponse,RedirectResponse
+from starlette.staticfiles import StaticFiles
 
 #导入RagAssistant核心类
 from rag_chat import get_assistant,DOCS_DIR,VECTOR_DB_PATH
 
+#静态文件地址
+STATIC_DIR="./static"
+
 #创建FastAPI应用对象
 app=FastAPI(title="对话小助手",description="基于知识库的智能问答助手")
 
-@app.get("/chat")
+#挂在静态文件目录
+app.mount("/static",StaticFiles(directory=STATIC_DIR),name="static")
+
+@app.post("/chat")
 async def chat_stream(request:Request):
     """接受页面请求并响应流式输出内容接口"""
 
     try:
+
         #get请求获取参数
-        question=request.query_params.get("questions").strip()
+        # question=request.query_params.get("questions").strip()
+
+        #post请求获取参数方式
+        body=await request.json()
+        question=body.get("question","").strip()
 
         if not question:
             return {"error":"问题不能为空"}
@@ -52,6 +64,12 @@ async def chat_stream(request:Request):
     except Exception as e:
         return {"error":f"请求处理失败:{str(e)}"}
 
+
+@app.get("/")
+async def root():
+    """访问根路径重定向到聊天页面"""
+    return RedirectResponse(url="/static/chat.html")
+
 if __name__ == "__main__":
     print("="*50)
     print("启动智能问答小助手服务")
@@ -59,5 +77,7 @@ if __name__ == "__main__":
     print(f"知识库所在位置：{DOCS_DIR}")
     print(f"向量文件保存位置:{VECTOR_DB_PATH}")
     print("请求地址：http://localhost:8001/chat?questions=问题")
+    print("页面地址1：http://localhost:8001/")
+    print("页面地址2：http://localhost:8001/static/chat.html")
 
     uvicorn.run(app,host="0.0.0.0",port=8001)
