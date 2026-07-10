@@ -209,8 +209,8 @@ class RAGAssistant:
 
         return docs
 
-    def chat(self,question,username):
-        """基于知识库检索回答问题"""
+    def chat_stream(self,question,username):
+        """基于知识库检索回答问题,并多次响应回答片段"""
 
         #获取当前用户会话
         session=self.session_manager.get_or_create(username)
@@ -260,22 +260,21 @@ class RAGAssistant:
             for response in responses:
                 if response.status_code == 200:
                     result = _extract_chunk_content(response)
-                    if result:
-                        print(result, end="", flush=True)
-                        # 拼接完整内容
-                        full_answer += result
+                    yield result
+                    #拼接完整内容
+                    full_answer += result
                 else:
-                    print(f"错误: {response.status_code} - {response.message}")
+                    yield f"错误: {response.status_code} - {response.message}"
 
             if full_answer:
                 #添加回答到对话历史并持久化保存
                 session.add_chat_history("assistant",full_answer)
                 self.session_manager.save_to_file()
             else:
-                print("未收到可用的模型回复内容")
+                yield "未收到可用的模型回复内容"
 
         except Exception as e:
-            print(f"请求失败：{str(e)}")
+            yield f"请求失败：{str(e)}"
 
     def show_help(self):
         """显示帮助信息"""
@@ -390,6 +389,22 @@ def main():
             break
         except Exception as e:
             print(f"发生异常{str(e)}")
+
+assistant=None
+
+def get_assistant():
+
+    """返回RagAssistant的单例对象"""
+
+    #声明assistant是全局变量
+    global assistant
+
+    if assistant is None:
+        assistant=RAGAssistant()
+        assistant.init()
+
+    return assistant
+
 
 if __name__ == "__main__":
     main()

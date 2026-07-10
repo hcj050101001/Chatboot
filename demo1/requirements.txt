@@ -4,12 +4,21 @@ dashscope>=1.14.0
 #用于从.env中获取环境配置的工具库
 python-dotenv>=1.0.0
 
-#下载依赖倒当前项目命令
-#python -X utf8 -m pip install -r requirements.txt
-
 langchain>=0.3.0
 langchain-community>=0.3.0
 langchain-text-splitters>=0.0.1
 chromadb>=0.5.0
 pypdf>=4.0.0
 docx2txt>=0.8
+
+#web框架，用于搭建resetful api服务
+fastapi>=0.115.0
+#web服务器，用于运行web服务
+uvicorn>=0.32.0
+#流式输出，实现服务器向实时数据传送
+sse-starlette>=2.0.0
+#文件上传支持
+python-multipart>=0.0.20
+
+#下载依赖倒当前项目命令
+#python -X utf8 -m pip install -r requirements.txt
