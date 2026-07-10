@@ -100,9 +100,9 @@ class Session:
 class SessionManager:
     """会话管理器，管理所有用户会话"""
 
-    def __init__(self):
+    def __init__(self,storage_file=STORAGE_LIFE):
         self.sessions={} #字典：保存用户名和对应的用户对象
-        self.storage_file=STORAGE_LIFE
+        self.storage_file=storage_file
         self.load_to_save() #启动时从文件中加载用户会话
 
     def get_or_create(self,username):

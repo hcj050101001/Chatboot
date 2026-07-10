@@ -17,6 +17,7 @@ from langchain_community.vectorstores import Chroma
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from ai_chat.chat import _extract_chunk_content
+from ai_chat.chat_muti_user import SessionManager
 
 #加载环境变量
 load_dotenv()
@@ -37,6 +38,8 @@ LOADER_MAPPING={
     ".docx":Docx2txtLoader
 }
 
+RAG_STORAGE_FILE = str(BASE_DIR / "rag_session.json")
+
 #设置System_Message
 SYSTEM_MESSAGE="你是公司的人事小助手，专门回答请假，入职，离职，考勤，薪资等人事问题，不会的问题不要回答"
 
@@ -47,6 +50,7 @@ class RAGAssistant:
         self.file_list=[] #记录已经加载的文档
         self.db_path=db_path #向量存放路径
         self.vectorstore=None #用于后续存储向量数据库对象
+        self.session_manager=SessionManager(RAG_STORAGE_FILE)
 
     def get_all_documents(self):
 
@@ -179,6 +183,18 @@ class RAGAssistant:
         else:
             return self.load_knowledge_base()
 
+    def list_documents(self):
+        """返回 docs 目录中当前支持检索的文件名。"""
+        if not os.path.isdir(self.docs_dir):
+            return []
+
+        return [
+            filename
+            for filename in os.listdir(self.docs_dir)
+            if os.path.isfile(os.path.join(self.docs_dir, filename))
+            and os.path.splitext(filename)[1].lower() in LOADER_MAPPING
+        ]
+
     def search_documents(self,question,k=3):
         """
         根据用户问题从知识库检索相似片段
@@ -193,8 +209,11 @@ class RAGAssistant:
 
         return docs
 
-    def chat(self,question):
+    def chat(self,question,username):
         """基于知识库检索回答问题"""
+
+        #获取当前用户会话
+        session=self.session_manager.get_or_create(username)
 
         #通过问题检索文档
         docs=self.search_documents(question)
@@ -211,26 +230,26 @@ class RAGAssistant:
 
         #构建增强提示词prompt
         user_message=f"""
-                【公司制度文档】
-                {context}
-                
-                【员工问题】
-                {question}
-                
-                请根据上述文档内容回答，并尽量标注信息来源文件
-        """
+【公司制度文档】
+{context}
+
+【员工问题】
+{question}
+
+请根据上述文档内容回答，并尽量标注信息来源文件。
+"""
+
+        #添加增强提示词到对话历史
+        session.add_chat_history("user",user_message)
+
+        #获取用户的对话历史
+        chat_history=session.get_history(max_turns=5)
 
         try:
 
-            #将系统提示词和用户问题封装为模型参数
-            messages = [
-                {"role": "system", "content": SYSTEM_MESSAGE},
-                {"role": "user", "content": user_message}
-            ]
-
             responses = Generation.call(
                 model=DEFAULT_MODEL,  # 模型名称
-                messages=messages,  # 对话参数
+                messages=chat_history,  # 对话参数
                 result_format="message",
                 stream=True,  # 开启流式输出
                 incremental_output=True  # 增量输出
@@ -249,11 +268,33 @@ class RAGAssistant:
                     print(f"错误: {response.status_code} - {response.message}")
 
             if full_answer:
-                return full_answer
+                #添加回答到对话历史并持久化保存
+                session.add_chat_history("assistant",full_answer)
+                self.session_manager.save_to_file()
             else:
                 print("未收到可用的模型回复内容")
+
         except Exception as e:
             print(f"请求失败：{str(e)}")
+
+    def show_help(self):
+        """显示帮助信息"""
+        print("""
+            命令说明
+            /login <用户名>    -登陆/切换用户
+            /logout           -退出登陆
+            /clear            -清空当前用户对话历史
+            /users            -查看在线的用户信息
+            /help             -显示帮助
+            /list             -显示已经加载的文档
+            /exit             -退出程序
+            
+            你可以问我：
+                -年假有多少天？
+                -迟到怎么扣钱？
+                -入职需要准备哪些资料
+                -离职要提前多久申请
+        """)
 
 def main():
     """启动知识库问答命令行。"""
@@ -266,24 +307,89 @@ def main():
         print("错误：未找到 DEFAULT_MODEL 或 EL_MODEL 配置")
         return
 
-    rag = RAGAssistant()
-    if not rag.init():
+    assistant = RAGAssistant()
+    #知识库初始化
+    if not assistant.init():
         return
 
+    print("="*50)
+    print("基于知识库的问答助手 - 支持多文档，多用户")
+    print("="*50)
+
+    #当前登录用户
+    current_user = None
+
     while True:
+        # 显示当前用户
+        user_prompt = f"[{current_user or '未登录'}] 用户："
+
         try:
-            question = input("\n用户：").strip()
+            user_input = input(user_prompt).strip()  # 去掉空格和换行
+            if not user_input:
+                continue
+
+            if user_input == "/exit":
+                print("再见")
+                break
+
+            elif user_input.startswith("/login"):
+                current_user = user_input[7:].strip()
+                if current_user:
+                    print(f"已登陆为：{current_user}")
+                else:
+                    print("用户名不能为空")
+                    current_user = None
+                continue
+
+            elif user_input == "/logout":
+                current_user = None
+                print("已退出登陆")
+                continue
+
+            elif user_input == "/users":
+                users_info = assistant.session_manager.list_users()
+                print(f"\n统计信息：")
+                print(f"总用户数：{users_info['total_users']}")
+                if users_info['users']:
+                    print(f"用户列表：{','.join(users_info['users'])}")
+                continue
+
+            elif user_input == "/clear":
+                if current_user:
+                    if assistant.session_manager.clear_history(current_user):
+                        print(f"已清空{current_user}的对话历史")
+                    else:
+                        print(f"用户{current_user}没有对话历史")
+                else:
+                    print("请先使用 /login 进行登陆")
+                continue
+
+            elif user_input == "/help":
+                assistant.show_help()
+                continue
+
+            elif user_input == "/list":
+                document_names = assistant.list_documents()
+                if document_names:
+                    print(f"已加载文档：{', '.join(document_names)}")
+                else:
+                    print("docs 文件夹中暂无支持的文档")
+                continue
+
+            # 未登录处理
+            if not current_user:
+                print(("请先使用 /login 进行登陆"))
+                continue
+
+            print("AI助手：")
+            assistant.chat(user_input,current_user)
+            print()
+
         except EOFError:
+            print("\n检测到输入结束，程序退出。")
             break
-
-        if question == "/exit":
-            break
-        if not question:
-            continue
-
-        print("\nAI助手：")
-        rag.chat(question)
-        print()
+        except Exception as e:
+            print(f"发生异常{str(e)}")
 
 if __name__ == "__main__":
     main()
