@@ -8,7 +8,8 @@ load_dotenv()
 dashscope.api_key = os.getenv("API_KEY")
 DEFAULT_MODEL = os.getenv("DEFAULT_MODEL")
 
-SYSTEM_MESSAGE = "你是一位温柔、自然、轻松的美女。"
+#设置System_Message
+SYSTEM_MESSAGE="你是一个公司的HR"
 
 # 定义列表保存对话历史，并作为参数进行传递
 chat_history = []
@@ -33,6 +34,7 @@ def _extract_chunk_content(response):
         return None
 
     return getattr(message, "content", None)
+
 
 #调用方法将系统提示词添加到对话历史
 add_chart_history("system",SYSTEM_MESSAGE)
@@ -89,6 +91,14 @@ def main():
         print("请确保：1. 存在.env文件 2. .env文件包含API_KEY=sk-xxx")
         return
 
+    from ai_chat.rag_chat import RAGAssistant
+
+    assistant=RAGAssistant()
+
+    #知识库初始化
+    if not assistant.init():
+        return
+
     while True:
         #获取用户输入信息
         user_input=input("\n 用户：")
@@ -97,7 +107,7 @@ def main():
             break
         #调用对话方法
         print("\n AI助手：")
-        chat(user_input)
+        assistant.chat(user_input)
 
         print()
 

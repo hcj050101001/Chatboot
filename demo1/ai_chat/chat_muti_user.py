@@ -25,7 +25,7 @@ DEFAULT_MODEL=os.getenv("DEFAULT_MODEL")
 #工具的回答 Tool_Message
 
 #设置System_Message
-SYSTEM_MESSAGE="你是一个AI助手"
+SYSTEM_MESSAGE="你是一个公司的HR"
 
 #持久化存储用户对话记忆的文件名称路径
 STORAGE_LIFE="session.json"
