@@ -241,7 +241,7 @@ def main():
     #获取多用户对话对象
     chat=ChatMultiUser()
 
-    #当前登陆用户
+    #当前登录用户
     current_user=None
 
     print("="*50)
@@ -250,8 +250,8 @@ def main():
     print()
 
     print("命令说明：")
-    print("/login <用户名> -登陆/切换用户")
-    print("/logout        -退出当前登陆")
+    print("/login <用户名> -登录/切换用户")
+    print("/logout        -退出当前登录")
     print("/clear         -清空当前用户的对话历史")
     print("/users         -显示所有用户的统计信息")
     print("/exit          -退出程序")
@@ -271,14 +271,14 @@ def main():
             elif user_input.startswith("/login"):
                 current_user=user_input[7:].strip()
                 if current_user:
-                    print(f"已登陆为：{current_user}")
+                    print(f"已登录为：{current_user}")
                 else:
                     print("用户名不能为空")
                     current_user=None
                 continue
             elif user_input=="/logout":
                 current_user=None
-                print("已退出登陆")
+                print("已退出登录")
                 continue
             elif user_input=="/users":
                 chat.show_user()
@@ -290,12 +290,12 @@ def main():
                     else:
                         print(f"用户{current_user}没有对话历史")
                 else:
-                    print("请先使用 /login 进行登陆")
+                    print("请先使用 /login 进行登录")
                 continue
 
             #未登录处理
             if not current_user:
-                print(("请先使用 /login 进行登陆"))
+                print(("请先使用 /login 进行登录"))
                 continue
 
             print("AI助手：")
