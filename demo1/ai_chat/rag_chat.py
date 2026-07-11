@@ -18,6 +18,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from ai_chat.chat import _extract_chunk_content
 from ai_chat.chat_muti_user import SessionManager
+from tools import decide_tool,excute_tool
 
 #加载环境变量
 load_dotenv()
@@ -212,6 +213,17 @@ class RAGAssistant:
     def chat_stream(self,question,username):
         """基于知识库检索回答问题,并多次响应回答片段"""
 
+        #获取工具使用决策
+        tool_name,params=decide_tool(question)
+        tool_result=None
+
+        if tool_name:
+            print(f"调用工具：{tool_name},参数：{params}")
+            tool_result=excute_tool(tool_name,**params)
+            print(f"工具返回:{tool_name}")
+
+        tool_info=f"\n【工具调用结果】\n{tool_result}\n" if tool_result else ""
+
         #获取当前用户会话
         session=self.session_manager.get_or_create(username)
 
@@ -230,14 +242,15 @@ class RAGAssistant:
 
         #构建增强提示词prompt
         user_message=f"""
-【公司制度文档】
-{context}
-
-【员工问题】
-{question}
-
-请根据上述文档内容回答，并尽量标注信息来源文件。
-"""
+            {tool_info}
+            【公司制度文档】
+            {context}
+            
+            【员工问题】
+            {question}
+            
+            请根据上述文档内容回答，并尽量标注信息来源文件。
+        """
 
         #添加增强提示词到对话历史
         session.add_chat_history("user",user_message)
