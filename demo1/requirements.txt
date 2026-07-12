@@ -11,6 +11,9 @@ chromadb>=0.5.0
 pypdf>=4.0.0
 docx2txt>=0.8
 
+#MySQL 数据库驱动，用于员工信息查询工具
+PyMySQL>=1.1.0
+
 #web框架，用于搭建resetful api服务
 fastapi>=0.115.0
 #web服务器，用于运行web服务

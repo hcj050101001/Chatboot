@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>人事小助手 - 智能问答系统</title>
+    <title>智能ERP助手 - 企业问答系统</title>
     <script src="https://cdn.jsdelivr.net/npm/vue@2/dist/vue.js"></script>
     <style>
         * {
@@ -1776,7 +1776,7 @@
                         <svg viewBox="0 0 24 24"><path d="M12 3.5v17M3.5 12h17M5.9 5.9l12.2 12.2M18.1 5.9 5.9 18.1"></path><circle cx="12" cy="12" r="4.4"></circle></svg>
                     </div>
                     <div>
-                        <h2>人事小助手</h2>
+                        <h2>智能ERP助手</h2>
                         <p class="brand-subtitle">Personal intelligence</p>
                     </div>
                 </div>
@@ -1830,7 +1830,7 @@
                     <div class="avatar" aria-hidden="true">{{ msg.role === 'user' ? '◌' : '✦' }}</div>
                     <div class="message-content-wrapper">
                         <div class="message-meta">
-                            <span>{{ msg.role === 'user' ? '你' : '人事小助手' }}</span>
+                            <span>{{ msg.role === 'user' ? '你' : '智能ERP助手' }}</span>
                             <span>{{ msg.role === 'user' ? '已发送' : '知识库回答' }}</span>
                         </div>
                         <div class="message-content" style="white-space: pre-wrap;">{{ stripImageResultMarkers(msg.content) }}</div>
@@ -1853,7 +1853,7 @@
                 <div v-if="streamingMessage || streamingImage" class="message assistant">
                     <div class="avatar" aria-hidden="true">✦</div>
                     <div class="message-content-wrapper">
-                        <div class="message-meta"><span>人事小助手</span><span>正在组织回答</span></div>
+                        <div class="message-meta"><span>智能ERP助手</span><span>正在组织回答</span></div>
                         <div v-if="streamingMessage" class="message-content">
                             {{ streamingMessage }}<span class="typing-cursor"></span>
                         </div>
@@ -1901,7 +1901,9 @@
                 </div>
                 <div class="quick-questions">
                     <span class="quick-caption">快捷探索</span>
-                    <button type="button" class="quick-btn" @click="quickAsk('年假有多少天？')">年假天数</button>
+                    <button type="button" class="quick-btn" @click="quickAsk('A供应商有哪些采购订单还未到货？')">采购到货</button>
+                    <button type="button" class="quick-btn" @click="quickAsk('当前库存低于安全库存的商品有哪些？')">库存预警</button>
+                    <button type="button" class="quick-btn" @click="quickAsk('本月销售额最高的客户是谁？')">销售统计</button>
                     <button type="button" class="quick-btn" @click="quickAsk('迟到怎么扣钱？')">迟到扣款</button>
                     <button type="button" class="quick-btn" @click="quickAsk('离职要提前多久申请？')">离职流程</button>
                     <button type="button" class="quick-btn" @click="quickAsk('病假工资怎么算？')">病假工资</button>
@@ -2041,7 +2043,7 @@
                 if (this.$refs.imageInput) this.$refs.imageInput.value = '';
             },
             getSessionTitle(session) {
-                if (!session) return '人事小助手';
+                if (!session) return '智能ERP助手';
                 const firstUserMsg = session.messages.find(m => m.role === 'user');
                 if (firstUserMsg) {
                     const cleanContent = firstUserMsg.content.replace(/^\/login\s*/i, '').trim();
@@ -2089,7 +2091,7 @@
                     messages: [{
                         id: Date.now(),
                         role: 'assistant',
-                        content: '你好！我是人事小助手 👋\n\n我可以帮你解答：\n• 📅 年假、病假、事假等请假政策\n• 📋 入职、离职流程\n• ⏰ 考勤、薪资制度\n• 💰 社保、公积金问题\n• 📚 其他人事制度\n\n请问有什么可以帮你的？'
+                        content: '你好！我是智能ERP助手 👋\n\n我可以帮你查询：\n• 📦 供应商采购订单到货情况\n• 📊 库存预警商品\n• 💰 月度销售统计\n• 🏭 生产、采购、库存和销售相关流程\n\n请问有什么可以帮你的？'
                     }]
                 };
                 this.sessions.unshift(newSession);

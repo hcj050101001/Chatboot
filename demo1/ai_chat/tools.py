@@ -4,13 +4,15 @@
 import base64
 import json
 import os
+import re
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import Literal
 
 import dashscope
 import httpx
+import pymysql
 from dashscope import Generation
 from dotenv import load_dotenv
 from langchain_core.tools import tool
@@ -20,6 +22,34 @@ from pydantic import ValidationError
 load_dotenv()
 dashscope.api_key=os.getenv("API_KEY")
 DEFAULT_MODEL=os.getenv("DEFAULT_MODEL")
+
+# MySQL 数据库连接配置。连接在调用数据库工具时按需创建，
+# 因此未配置数据库不会影响其他工具和 RAG 问答的启动。
+DB_CONFIG = {
+    "host": os.getenv("DB_HOST", "localhost"),
+    "port": int(os.getenv("DB_PORT", "3306")),
+    "user": os.getenv("DB_USER"),
+    "password": os.getenv("DB_PASSWORD"),
+    "database": os.getenv("DB_NAME"),
+    "charset": "utf8mb4",
+}
+
+
+def get_db_connection():
+    """获取 MySQL 数据库连接。"""
+    missing = [
+        env_name
+        for env_name, config_name in (
+            ("DB_USER", "user"),
+            ("DB_PASSWORD", "password"),
+            ("DB_NAME", "database"),
+        )
+        if not DB_CONFIG[config_name]
+    ]
+    if missing:
+        raise RuntimeError(f"缺少数据库配置：{', '.join(missing)}")
+
+    return pymysql.connect(**DB_CONFIG)
 
 #标注图保存目录：与 FastAPI 挂载的 ai_chat/static 保持一致
 BASE_DIR = Path(__file__).resolve().parent
@@ -70,6 +100,148 @@ def get_current_datetime(
         return f"不支持的时间格式：{format_type}。可选值：{supported_formats}"
 
     return result
+
+
+def _format_query_results(title: str, results: list[dict]) -> str:
+    """将固定 SQL 工具的查询结果转换为可供模型整理的文本。"""
+    if not results:
+        return f"{title}：未找到匹配记录"
+
+    lines = [f"{title}：共 {len(results)} 条记录"]
+    lines.extend(json.dumps(row, ensure_ascii=False, default=str) for row in results)
+    return "\n".join(lines)
+
+
+@tool
+def query_pending_purchase_orders(supplier_keyword: str) -> str:
+    """
+    查询指定供应商尚未完全到货的采购订单。
+    当用户询问“某供应商有哪些采购订单未到货”“A供应商的采购订单到货了吗”时使用。
+
+    Args:
+        supplier_keyword: 供应商名称关键词，例如“A供应商”。
+    """
+    supplier_keyword = supplier_keyword.strip()
+    if not supplier_keyword or len(supplier_keyword) > 100:
+        return "请输入不超过 100 个字符的供应商名称关键词"
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(pymysql.cursors.DictCursor) as cursor:
+            sql = """
+                SELECT
+                    po.purchase_order_id AS 采购订单号,
+                    s.supplier_name AS 供应商,
+                    po.order_date AS 下单日期,
+                    po.expected_arrival_date AS 预计到货日期,
+                    po.order_status AS 到货状态,
+                    po.total_amount AS 订单金额,
+                    GROUP_CONCAT(
+                        CONCAT(p.product_name, ' x ', poi.quantity,
+                               '，已到 ', poi.received_quantity)
+                        ORDER BY p.product_name SEPARATOR '；'
+                    ) AS 商品明细
+                FROM purchase_orders po
+                JOIN suppliers s ON s.supplier_id = po.supplier_id
+                JOIN purchase_order_items poi ON poi.purchase_order_id = po.purchase_order_id
+                JOIN products p ON p.product_id = poi.product_id
+                WHERE s.supplier_name LIKE %s
+                  AND po.order_status IN ('待到货', '部分到货')
+                GROUP BY po.purchase_order_id, s.supplier_name, po.order_date,
+                         po.expected_arrival_date, po.order_status, po.total_amount
+                ORDER BY po.expected_arrival_date
+                LIMIT 20
+            """
+            cursor.execute(sql, (f"%{supplier_keyword}%",))
+            results = cursor.fetchall()
+        return _format_query_results("未完全到货的采购订单", results)
+    except Exception as error:
+        print(f"查询采购订单失败：{error}")
+        return "查询采购订单失败，请检查 ERP 数据库配置或稍后重试"
+    finally:
+        if conn:
+            conn.close()
+
+
+@tool
+def query_low_stock_products() -> str:
+    """
+    查询当前库存低于安全库存的商品。
+    当用户询问“库存预警”“哪些商品库存不足”“低于安全库存的商品”时使用。
+    """
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(pymysql.cursors.DictCursor) as cursor:
+            cursor.execute(
+                """
+                SELECT
+                    product_id AS 商品编号,
+                    product_name AS 商品名称,
+                    category AS 分类,
+                    unit AS 单位,
+                    current_stock AS 当前库存,
+                    safety_stock AS 安全库存,
+                    safety_stock - current_stock AS 缺口数量
+                FROM products
+                WHERE current_stock < safety_stock
+                ORDER BY 缺口数量 DESC
+                LIMIT 50
+                """
+            )
+            results = cursor.fetchall()
+        return _format_query_results("库存预警商品", results)
+    except Exception as error:
+        print(f"查询库存预警失败：{error}")
+        return "查询库存预警失败，请检查 ERP 数据库配置或稍后重试"
+    finally:
+        if conn:
+            conn.close()
+
+
+@tool
+def query_monthly_top_customer(month: str = "") -> str:
+    """
+    查询指定月份销售额最高的客户。
+    当用户询问“本月销售额最高的客户是谁”“2026-07 销售冠军客户”时使用。
+
+    Args:
+        month: 月份，格式 YYYY-MM；为空时查询当前月份。
+    """
+    month = month.strip() or date.today().strftime("%Y-%m")
+    if not re.fullmatch(r"\d{4}-\d{2}", month):
+        return "月份格式应为 YYYY-MM，例如 2026-07"
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(pymysql.cursors.DictCursor) as cursor:
+            cursor.execute(
+                """
+                SELECT
+                    c.customer_id AS 客户编号,
+                    c.customer_name AS 客户名称,
+                    SUM(so.total_amount) AS 销售总额,
+                    COUNT(*) AS 完成订单数
+                FROM sales_orders so
+                JOIN customers c ON c.customer_id = so.customer_id
+                WHERE DATE_FORMAT(so.order_date, '%%Y-%%m') = %s
+                  AND so.order_status = '已完成'
+                GROUP BY c.customer_id, c.customer_name
+                ORDER BY 销售总额 DESC
+                LIMIT 1
+                """,
+                (month,),
+            )
+            results = cursor.fetchall()
+        return _format_query_results(f"{month} 销售额最高客户", results)
+    except Exception as error:
+        print(f"查询销售统计失败：{error}")
+        return "查询销售统计失败，请检查 ERP 数据库配置或稍后重试"
+    finally:
+        if conn:
+            conn.close()
 
 def save_annotated_image(image_base64:str)->str:
     """
@@ -170,10 +342,13 @@ def detect_defect(image_data:str)->str:
             "image_url":""
         },ensure_ascii=False)
 
-#工具列表
+# 工具列表：此处注册的工具会提供给 decide_tool() 进行意图判断和调用。
 TOOLS=[
-    get_current_datetime,
-    detect_defect
+    get_current_datetime,              # 查询当前日期、时间或星期
+    query_pending_purchase_orders,     # 查询指定供应商未完全到货的采购订单
+    query_low_stock_products,          # 查询当前库存低于安全库存的商品
+    query_monthly_top_customer,        # 查询指定月份销售额最高的客户
+    detect_defect                      # 检测上传的零件图片是否存在瑕疵
 ]
 
 def _find_tool(tool_name: str):
@@ -269,7 +444,8 @@ def decide_tool(question:str)->tuple:
         规则：
         1.只选择一个最相关的工具
         2.参数从用户问题中提取
-        3.如果用户问的是制度问题(如请假，考勤，入离职)，不要调用工具
+        3.采购订单未到货、库存预警、销售统计等 ERP 数据问题必须选择最匹配的查询工具
+        4.ERP 操作流程、配置说明等文档知识问题不要调用数据库工具
         4.只输出纯JSON，不要有任何解释
     """
 

@@ -43,7 +43,7 @@ LOADER_MAPPING={
 RAG_STORAGE_FILE = str(BASE_DIR / "rag_session.json")
 
 #设置System_Message
-SYSTEM_MESSAGE="你是公司的人事小助手，专门回答请假，入职，离职，考勤，薪资等人事问题，不会的问题不要回答"
+SYSTEM_MESSAGE="你是制造企业的智能ERP助手，负责回答采购订单、库存、生产工单、销售合同及ERP操作流程问题。数据查询必须依据工具结果；流程问题依据知识库文档，不确定时明确说明。"
 
 class RAGAssistant:
     """基于知识库的问答助手 - 支持多文档"""
@@ -270,12 +270,13 @@ class RAGAssistant:
         #构建增强提示词prompt
         user_message=f"""
             {tool_info}
-            【公司制度文档】
+
+            【ERP知识库文档】
             {context}
-            
-            【员工问题】
+
+            【用户问题】
             {question}
-            
+
             请根据上述文档内容回答，并尽量标注信息来源文件。
         """
 
@@ -333,10 +334,9 @@ class RAGAssistant:
             /exit             -退出程序
             
             你可以问我：
-                -年假有多少天？
-                -迟到怎么扣钱？
-                -入职需要准备哪些资料
-                -离职要提前多久申请
+                -A供应商有哪些采购订单还未到货？
+                -当前库存低于安全库存的商品有哪些？
+                -本月销售额最高的客户是谁？
         """)
 
 def main():

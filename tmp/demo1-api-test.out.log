@@ -1,0 +1,12 @@
+INFO:     127.0.0.1:55904 - "GET / HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:55904 - "GET /static/chat.html HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55904 - "GET /static/chat.html HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52849 - "GET / HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:52849 - "GET /static/chat.html HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:52849 - "GET /static/annotated/annotated_20260711_162654_f7f1a44e.jpg HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:52849 - "GET /static/annotated/annotated_20260711_162718_a056cc3d.jpg HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:52849 - "GET /favicon.ico HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51548 - "POST /chat HTTP/1.1" 200 OK
+正在进行向量化...
+知识库加载成功...
+INFO:     127.0.0.1:55455 - "POST /chat HTTP/1.1" 200 OK

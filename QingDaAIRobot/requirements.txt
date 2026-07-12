@@ -1,0 +1,15 @@
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
+langchain>=0.2.0
+langchain-openai>=0.1.7
+langchain-core>=0.2.0
+#数据解析和校验的依赖
+pydantic>=2.6.0
+#管理应用配置的扩展类
+pydantic-settings>=2.1.0
+# python-dotenv - 用于从.env文件加载环境变量的工具库
+python-dotenv>=1.0.0
+
+#python项目下载依赖命令
+# python -X utf8 -m pip install -r requirements.txt
+
