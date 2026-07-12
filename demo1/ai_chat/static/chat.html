@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>智能ERP助手 - 企业问答系统</title>
+    <title>智能小助手 - 企业问答系统</title>
     <script src="https://cdn.jsdelivr.net/npm/vue@2/dist/vue.js"></script>
     <style>
         * {
@@ -1776,7 +1776,7 @@
                         <svg viewBox="0 0 24 24"><path d="M12 3.5v17M3.5 12h17M5.9 5.9l12.2 12.2M18.1 5.9 5.9 18.1"></path><circle cx="12" cy="12" r="4.4"></circle></svg>
                     </div>
                     <div>
-                        <h2>智能ERP助手</h2>
+                        <h2>智能小助手</h2>
                         <p class="brand-subtitle">Personal intelligence</p>
                     </div>
                 </div>
@@ -1823,17 +1823,17 @@
             </header>
 
             <section class="messages-container" ref="messagesContainer" aria-live="polite">
-                <div class="conversation-kicker"><i></i> 你的专属人事知识空间</div>
+                <div class="conversation-kicker"><i></i> 你的专属知识与数据问答空间</div>
 
                 <!-- 历史消息：继续纯文本插值，不使用 v-html -->
                 <div v-for="msg in currentMessages" :key="msg.id" :class="['message', msg.role]">
                     <div class="avatar" aria-hidden="true">{{ msg.role === 'user' ? '◌' : '✦' }}</div>
                     <div class="message-content-wrapper">
                         <div class="message-meta">
-                            <span>{{ msg.role === 'user' ? '你' : '智能ERP助手' }}</span>
+                            <span>{{ msg.role === 'user' ? '你' : '智能小助手' }}</span>
                             <span>{{ msg.role === 'user' ? '已发送' : '知识库回答' }}</span>
                         </div>
-                        <div class="message-content" style="white-space: pre-wrap;">{{ stripImageResultMarkers(msg.content) }}</div>
+                        <div class="message-content" style="white-space: pre-wrap;">{{ msg.role === 'assistant' ? formatAssistantAnswer(msg.content) : stripImageResultMarkers(msg.content) }}</div>
                         <div v-if="msg.image &amp;&amp; msg.role === 'user'" class="message-image-card user-thumbnail-card">
                             <div class="user-thumbnail-image"
                                  :style="{ backgroundImage: 'url(' + msg.image + ')' }"
@@ -1853,9 +1853,9 @@
                 <div v-if="streamingMessage || streamingImage" class="message assistant">
                     <div class="avatar" aria-hidden="true">✦</div>
                     <div class="message-content-wrapper">
-                        <div class="message-meta"><span>智能ERP助手</span><span>正在组织回答</span></div>
-                        <div v-if="streamingMessage" class="message-content">
-                            {{ streamingMessage }}<span class="typing-cursor"></span>
+                        <div class="message-meta"><span>智能小助手</span><span>正在组织回答</span></div>
+                        <div v-if="streamingMessage" class="message-content" style="white-space: pre-wrap;">
+                            {{ formatAssistantAnswer(streamingMessage) }}<span class="typing-cursor"></span>
                         </div>
                         <div v-if="streamingImage" class="message-image-card">
                             <div class="image-result-label"><i></i><span>缺陷检测标注结果</span></div>
@@ -1935,6 +1935,27 @@
             .replace(/\[\/?(?:IMAGE_RESULT|IAMGE_RESULT)\]/g, '')
             .replace(/\[[A-Z_]*$/g, '')
             .trimEnd();
+    }
+
+    function formatAssistantAnswerText(text) {
+        let result = cleanImageResultMarkers(text)
+            .replace(/\*\*/g, '')
+            .replace(/#{1,6}\s*/g, '')
+            .replace(/^\s*根据(?:系统)?查询结果[，,:：]\s*/i, '查询结论：')
+            .replace(/\s*[•·]\s*/g, '\n')
+            .replace(/\s+-\s+(?=[\u4e00-\u9fa5A-Za-z])/g, '\n')
+            .replace(/\s*(?=【记录\s*\d+】)/g, '\n\n')
+            .replace(/\s*(?=(?:客户编号|客户名称|供应商|采购订单号|商品编号|商品名称|分类|岗位|单位|下单日期|预计到货日期|到货状态|订单金额|商品明细|当前库存|安全库存|缺口数量|销售总额|完成订单数|完成订单数量|成交客户数|平均订单金额|查询结论|数据来源|信息来源|备注|建议)[：:])/g, '\n')
+            .replace(/\s*(?=(?:客户编号|客户名称|销售总额|完成订单数)：)/g, '\n')
+            .replace(/\n[ \t]+/g, '\n')
+            .replace(/\n{2,}/g, '\n')
+            .trim();
+
+        // 避免模型把多个字段粘在同一行，例如“CUST001销售总额”。
+        result = result.replace(/([^\n])(?=(?:客户编号|客户名称|销售总额|完成订单数|数据来源|信息来源)[：:])/g, '$1\n');
+        result = result.replace(/\n(?=(?:【记录\s*\d+】|数据来源|信息来源)[：:]?)/g, '\n\n');
+        result = result.replace(/\n*[ \t]*((?:数据来源|信息来源)\s*[：:])/g, '\n\n$1');
+        return result;
     }
 
     new Vue({
@@ -2043,7 +2064,7 @@
                 if (this.$refs.imageInput) this.$refs.imageInput.value = '';
             },
             getSessionTitle(session) {
-                if (!session) return '智能ERP助手';
+                if (!session) return '智能小助手';
                 const firstUserMsg = session.messages.find(m => m.role === 'user');
                 if (firstUserMsg) {
                     const cleanContent = firstUserMsg.content.replace(/^\/login\s*/i, '').trim();
@@ -2058,6 +2079,9 @@
             },
             stripImageResultMarkers(content) {
                 return cleanImageResultMarkers(content);
+            },
+            formatAssistantAnswer(content) {
+                return formatAssistantAnswerText(content);
             },
             loadSessions() {
                 const saved = localStorage.getItem('hr_assistant_sessions');
@@ -2091,7 +2115,7 @@
                     messages: [{
                         id: Date.now(),
                         role: 'assistant',
-                        content: '你好！我是智能ERP助手 👋\n\n我可以帮你查询：\n• 📦 供应商采购订单到货情况\n• 📊 库存预警商品\n• 💰 月度销售统计\n• 🏭 生产、采购、库存和销售相关流程\n\n请问有什么可以帮你的？'
+                        content: '你好！我是智能小助手 👋\n\n我可以帮你查询：\n• 📄 公司制度与流程\n• 📦 供应商采购订单到货情况\n• 📊 库存预警和销售统计\n• 🏭 生产数据与零件图片检测\n\n请问有什么可以帮你的？'
                     }]
                 };
                 this.sessions.unshift(newSession);

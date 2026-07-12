@@ -7,6 +7,7 @@ RAG知识库问答系统 - 支持docs 文件夹多文档检索
 """
 import json
 import os
+import re
 from pathlib import Path
 
 import dashscope
@@ -17,19 +18,20 @@ from langchain_community.vectorstores import Chroma
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from ai_chat.chat_muti_user import SessionManager,strip_image_result_markers
-from ai_chat.tools import InputGuardrail, decide_tool,excute_tool
+from ai_chat.tools import decide_tool,excute_tool
 from ai_chat.llm_client import get_llm_model, stream_chat
 
-#加载环境变量
-load_dotenv()
+# 始终从项目根目录读取配置，不依赖启动时的当前工作目录。
+PROJECT_DIR=Path(__file__).resolve().parent.parent
+load_dotenv(PROJECT_DIR / ".env")
 
-dashscope.api_key=os.getenv("DASHSCOPE_API_KEY")
+dashscope.api_key=os.getenv("DASHSCOPE_API_KEY") or os.getenv("API_KEY")
 EL_MODEL=os.getenv("EL_MODEL") #向量模型
 
 #路径配置：始终以当前脚本所在目录为准，避免受启动目录影响
 BASE_DIR = Path(__file__).resolve().parent
 DOCS_DIR = str(BASE_DIR / "docs")
-VECTOR_DB_PATH = str(BASE_DIR / "chroma_db")
+VECTOR_DB_PATH = str(BASE_DIR / "chroma_db_v4")
 
 #支持的文档加载器
 LOADER_MAPPING={
@@ -39,7 +41,50 @@ LOADER_MAPPING={
 }
 
 #设置System_Message
-SYSTEM_MESSAGE="你是制造企业的智能ERP助手，负责回答采购订单、库存、生产工单、销售合同及ERP操作流程问题。数据查询必须依据工具结果；流程问题依据知识库文档，不确定时明确说明。"
+SYSTEM_MESSAGE="""你是制造企业的智能小助手，负责公司制度与流程问答、采购订单、库存、生产、销售数据查询和已注册的图片检测等功能。
+数据查询必须依据工具结果；流程问题依据知识库文档，不确定时明确说明。
+输出使用清晰的纯文本，不使用Markdown星号、井号或表格。第一行给出“查询结论：”；每个字段单独一行；多条记录使用“【记录1】”分隔；最后单独一行写“数据来源：”。"""
+
+
+def _tool_source_label(tool_name,params):
+    """根据实际调用的工具返回可核验的数据来源。"""
+    database=os.getenv("DB_NAME","erp_db")
+    table_sources={
+        "query_pending_purchase_orders":("purchase_orders","suppliers","purchase_order_items","products"),
+        "query_low_stock_products":("products",),
+        "query_monthly_top_customer":("sales_orders","customers"),
+    }
+    if tool_name == "get_erp_table_schema":
+        tables=(str((params or {}).get("table_name","未知表")),)
+    elif tool_name == "query_erp_statistics":
+        statistic_tables={
+            "purchase_summary":("purchase_orders",),
+            "inventory_summary":("products",),
+            "sales_summary":("sales_orders",),
+            "production_summary":("production_orders",),
+        }
+        tables=statistic_tables.get((params or {}).get("statistic_type"),())
+    else:
+        tables=table_sources.get(tool_name,())
+
+    if tables:
+        return "ERP数据库（" + "、".join(f"{database}.{table}" for table in tables) + "）"
+    if tool_name == "detect_defect":
+        return "零件图片检测服务"
+    if tool_name == "get_current_datetime":
+        return "系统日期时间"
+    return "已注册工具"
+
+
+def _append_verified_source(answer,source_label):
+    """移除模型自行生成的来源描述，并追加后端确认过的真实来源。"""
+    cleaned=re.sub(
+        r"\s*(?:数据来源|信息来源)\s*[：:].*$",
+        "",
+        strip_image_result_markers(answer),
+        flags=re.IGNORECASE | re.DOTALL,
+    ).rstrip()
+    return f"{cleaned}\n\n数据来源：{source_label}"
 
 class RAGAssistant:
     """基于知识库的问答助手 - 支持多文档"""
@@ -191,8 +236,20 @@ class RAGAssistant:
             return True
         if not os.path.exists(self.db_path) or not os.listdir(self.db_path):
             return self.build_knowledge_base()
-        else:
-            return self.load_knowledge_base()
+
+        if not self.load_knowledge_base():
+            return False
+
+        # 拷贝项目或构建中断时，Chroma 目录可能存在但集合为空。
+        # 这种情况自动用 docs 中的原始文档重建，避免老师首次运行检索不到内容。
+        try:
+            if self.vectorstore._collection.count() == 0:
+                print("检测到空向量库，正在从 docs 自动重建...")
+                return self.build_knowledge_base()
+        except Exception as error:
+            print(f"检查向量库状态失败，将尝试重新构建：{error}")
+            return self.build_knowledge_base()
+        return True
 
     def list_documents(self):
         """返回 docs 目录中当前支持检索的文件名。"""
@@ -225,11 +282,6 @@ class RAGAssistant:
 
     def chat_stream(self,question,image_base64,username):
         """基于知识库检索回答问题,并多次响应回答片段"""
-
-        is_safe, rejection_reason = InputGuardrail.validate(question)
-        if not is_safe:
-            yield f"请求已拒绝：{rejection_reason}"
-            return
 
         #上传图片时直接进行缺陷检测；纯文本问题再由模型决定是否调用工具
         if image_base64:
@@ -271,8 +323,8 @@ class RAGAssistant:
         #获取当前用户会话
         session=self.session_manager.get_or_create(username)
 
-        #通过问题检索文档
-        docs=self.search_documents(question)
+        # 数据工具已经提供了权威结果时不再混入无关知识库片段。
+        docs=[] if tool_result else self.search_documents(question)
 
         #将检索到的文档片段添加来源并拼接为字符串
         context_parts=[]
@@ -283,6 +335,15 @@ class RAGAssistant:
             context_parts.append(f"【文档片段{i} - 来自 《{source}》】 \n {doc.page_content}")
 
         context="\n\n".join(context_parts)
+        source_names=list(dict.fromkeys(
+            doc.metadata.get("source","未知来源") for doc in docs
+        ))
+        if tool_result:
+            source_label=_tool_source_label(tool_name,params)
+        elif source_names:
+            source_label="、".join(source_names)
+        else:
+            source_label="当前未检索到相关知识库文件"
 
         #构建增强提示词prompt
         user_message=f"""
@@ -294,7 +355,8 @@ class RAGAssistant:
             【用户问题】
             {question}
 
-            请根据上述文档内容回答，并尽量标注信息来源文件。
+            请根据工具结果和相关文档回答。使用纯文本结构，不要输出Markdown符号；字段必须逐行展示。
+            系统会在回答末尾自动添加真实来源，你不要自行输出“数据来源”或“信息来源”。
         """
 
         # 会话库只保存用户原始问题，避免工具结果和检索片段污染聊天记录。
@@ -311,12 +373,12 @@ class RAGAssistant:
             for result in stream_chat(chat_history):
                 result=strip_image_result_markers(result)
                 if result:
-                    yield result
                     full_answer += result
 
             if full_answer:
-                #添加回答到对话历史并持久化保存
-                full_answer=strip_image_result_markers(full_answer)
+                # 来源由后端按实际工具或检索文档确定，不接受模型自行编写。
+                full_answer=_append_verified_source(full_answer,source_label)
+                yield full_answer
                 session.add_chat_history("assistant",full_answer)
                 self.session_manager.save_session(username)
             else:

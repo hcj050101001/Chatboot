@@ -2,11 +2,13 @@
 import json
 import os
 from collections.abc import Iterator
+from pathlib import Path
 
 import httpx
 from dotenv import load_dotenv
 
-load_dotenv()
+PROJECT_DIR=Path(__file__).resolve().parent.parent
+load_dotenv(PROJECT_DIR / ".env")
 
 
 def _config() -> tuple[str, str, str]:

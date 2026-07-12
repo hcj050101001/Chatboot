@@ -3,3 +3,10 @@
 __pycache__/
 .idea/
 session.json
+demo1/.venv/
+demo1/ai_chat/chat_sessions.json
+demo1/ai_chat/chroma_db_v4/
+demo1/ai_chat/static/annotated/
+demo1/static/annotated/
+demo1/*session*.json
+demo1/ai_chat/*session*.json

@@ -18,8 +18,9 @@ from pydantic import ValidationError
 
 from ai_chat.llm_client import complete_chat
 
-#加载环境变量
-load_dotenv()
+# 始终从项目根目录读取配置，不依赖 PyCharm 的工作目录。
+PROJECT_DIR=Path(__file__).resolve().parent.parent
+load_dotenv(PROJECT_DIR / ".env")
 
 # MySQL 数据库连接配置。连接在调用数据库工具时按需创建，
 # 因此未配置数据库不会影响其他工具和 RAG 问答的启动。
@@ -46,69 +47,6 @@ ERP_TABLES = frozenset({
 })
 
 
-class SensitiveDataGuardrail:
-    """识别不应通过智能助手检索或暴露的敏感信息请求。"""
-
-    _PATTERNS = (
-        r"薪资|工资|绩效奖金|工资单",
-        r"身份证|身份证号|银行卡|银行账户|开户行",
-        r"密码|口令|密钥|api[ _-]?key|access[ _-]?token|secret",
-        r"手机号|手机号码|家庭住址|住址|个人邮箱",
-    )
-
-    @classmethod
-    def validate(cls, question: str) -> tuple[bool, str]:
-        for pattern in cls._PATTERNS:
-            if re.search(pattern, question, flags=re.IGNORECASE):
-                return False, "该请求可能涉及个人或系统敏感信息，已拒绝处理"
-        return True, ""
-
-
-class InputGuardrail:
-    """在模型和数据库调用前拦截恶意、危险或超长输入。"""
-
-    MAX_QUESTION_LENGTH = 1000
-    _PROMPT_INJECTION_PATTERNS = (
-        r"忽略.{0,20}(之前|以上|所有).{0,20}(指令|规则)",
-        r"无视.{0,20}(指令|规则)",
-        r"(system|developer)\s*(prompt|message|instruction)",
-        r"提示词注入|越狱|jailbreak",
-    )
-    _DANGEROUS_SQL_PATTERNS = (
-        r"\binsert\s+into\b|\bupdate\s+\w+\s+set\b|\bdelete\s+from\b",
-        r"\bdrop\s+(table|database)\b|\balter\s+table\b|\btruncate\s+table\b",
-        r"\bcreate\s+(table|database|user)\b|\bgrant\s+\w+|\brevoke\s+\w+|\breplace\s+into\b",
-        r"\b(load\s+data|into\s+outfile)\b",
-        r";\s*(insert\s+into|update\s+\w+\s+set|delete\s+from|drop\s+(table|database)|alter\s+table|truncate\s+table|create\s+(table|database|user)|grant\s+\w+|revoke\s+\w+)\b",
-    )
-    _SCRIPT_PATTERNS = (r"<\s*script\b", r"javascript\s*:", r"onerror\s*=")
-
-    @classmethod
-    def validate(cls, question: str) -> tuple[bool, str]:
-        if not isinstance(question, str):
-            return False, "请求内容必须是文本"
-
-        cleaned_question = question.strip()
-        if not cleaned_question:
-            return False, "请求内容不能为空"
-        if len(cleaned_question) > cls.MAX_QUESTION_LENGTH:
-            return False, f"请求内容不能超过 {cls.MAX_QUESTION_LENGTH} 个字符"
-
-        for pattern in cls._PROMPT_INJECTION_PATTERNS:
-            if re.search(pattern, cleaned_question, flags=re.IGNORECASE):
-                return False, "检测到提示词注入或绕过规则的内容"
-
-        for pattern in cls._DANGEROUS_SQL_PATTERNS:
-            if re.search(pattern, cleaned_question, flags=re.IGNORECASE):
-                return False, "仅允许只读查询，禁止提交修改数据库的 SQL 指令"
-
-        for pattern in cls._SCRIPT_PATTERNS:
-            if re.search(pattern, cleaned_question, flags=re.IGNORECASE):
-                return False, "检测到潜在脚本注入内容"
-
-        return SensitiveDataGuardrail.validate(cleaned_question)
-
-
 def get_db_connection():
     """获取 MySQL 数据库连接。"""
     missing = [
@@ -132,8 +70,8 @@ ANNOTATED_IMAGE_DIR = BASE_DIR / "static" / "annotated"
 #确保目录存在
 os.makedirs(ANNOTATED_IMAGE_DIR,exist_ok=True)
 
-#智能检测地址
-DETECT_API_URL="http://47.104.167.34:9900/api/detect"
+# 图片检测服务可在 .env 中替换，避免部署地址变化后必须改代码。
+DETECT_API_URL=os.getenv("DETECT_API_URL","http://47.104.167.34:9900/api/detect")
 
 
 @tool

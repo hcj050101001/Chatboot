@@ -22,7 +22,17 @@ STATIC_DIR=Path(__file__).resolve().parent / "static"
 logger=logging.getLogger(__name__)
 
 #创建FastAPI应用对象
-app=FastAPI(title="对话小助手",description="基于知识库的智能问答助手")
+app=FastAPI(title="智能小助手",description="基于知识库和ERP业务数据的智能问答助手")
+
+
+@app.middleware("http")
+async def disable_static_cache(request:Request,call_next):
+    """开发和作业演示期间禁用静态页面缓存，确保前端修改立即生效。"""
+    response=await call_next(request)
+    if request.url.path.startswith("/static/"):
+        response.headers["Cache-Control"]="no-store, no-cache, must-revalidate"
+        response.headers["Pragma"]="no-cache"
+    return response
 
 #挂在静态文件目录
 app.mount("/static",StaticFiles(directory=STATIC_DIR),name="static")
@@ -59,13 +69,14 @@ async def chat_stream(request:Request):
     if not isinstance(question,str):
         raise HTTPException(status_code=400,detail="question 必须是字符串")
     question=question.strip()
-    if not question:
-        raise HTTPException(status_code=400,detail="问题不能为空")
-
     image_base64=body.get("image","")
+    if not isinstance(image_base64,str):
+        raise HTTPException(status_code=400,detail="image 必须是 Base64 字符串")
 
     if not question and not image_base64:
-        return {"error":"问题或图片不能为空"}
+        raise HTTPException(status_code=400,detail="问题或图片不能为空")
+    if not question and image_base64:
+        question="请查看这张图片"
 
     # 无论当前是否已登录，/login 都应切换到指定用户。
     if question.startswith("/login"):
@@ -81,6 +92,15 @@ async def chat_stream(request:Request):
             media_type="text/event-stream",
         )
 
+    if question == "/logout":
+        if current_user:
+            logged_out_user=current_user
+            current_user=None
+            message=f"用户 {logged_out_user} 已退出登录"
+        else:
+            message="当前没有已登录用户"
+        return StreamingResponse(complete_message(message),media_type="text/event-stream")
+
     if not current_user:
         return StreamingResponse(complete_message("请先登录"),media_type="text/event-stream")
 
@@ -89,6 +109,19 @@ async def chat_stream(request:Request):
     except Exception as error:
         logger.exception("初始化问答助手失败")
         raise HTTPException(status_code=503,detail="问答服务暂时不可用") from error
+
+    if question == "/clear":
+        cleared=assistant.session_manager.clear_history(current_user)
+        message="当前用户的对话历史已清空" if cleared else "当前用户还没有可清空的对话历史"
+        return StreamingResponse(complete_message(message),media_type="text/event-stream")
+
+    if question == "/users":
+        users=assistant.session_manager.list_users()
+        user_names="、".join(users["users"]) if users["users"] else "暂无"
+        return StreamingResponse(
+            complete_message(f"会话用户数：{users['total_users']}\n用户列表：{user_names}"),
+            media_type="text/event-stream",
+        )
 
     def generation():
         chunk_count=0
