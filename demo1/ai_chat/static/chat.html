@@ -1245,14 +1245,15 @@
             position: absolute;
             z-index: 4;
             inset: -2px;
-            padding: 2px;
+            border: 2px solid rgba(139, 176, 255, 0.56);
             border-radius: inherit;
-            background: conic-gradient(from var(--rim-angle, 0deg), rgba(116, 162, 255, 0.1) 0deg, rgba(137, 198, 255, 0.34) 34deg, rgba(159, 103, 255, 0.98) 84deg, rgba(96, 239, 203, 0.9) 126deg, rgba(128, 180, 255, 0.22) 174deg, rgba(124, 99, 255, 0.06) 226deg, rgba(123, 165, 255, 0.7) 294deg, rgba(171, 134, 255, 0.88) 330deg, rgba(116, 162, 255, 0.1) 360deg);
+            background: transparent;
+            box-shadow:
+                0 0 16px rgba(104, 150, 255, 0.32),
+                0 0 38px rgba(137, 92, 255, 0.18),
+                inset 0 0 14px rgba(100, 226, 207, 0.08);
             animation: rim-rotate 5.6s ease-in-out infinite;
             pointer-events: none;
-            -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-            -webkit-mask-composite: xor;
-            mask-composite: exclude;
         }
 
         .app-container::after {
@@ -1264,11 +1265,11 @@
             opacity: 0.5;
             box-shadow: inset 0 0 0 1px rgba(191, 216, 255, 0.12), inset 0 0 30px rgba(122, 158, 255, 0.04);
             background-image:
-                radial-gradient(ellipse 34% 38% at var(--pointer-x) var(--pointer-y), rgba(121, 178, 255, 0.18), transparent 74%),
-                radial-gradient(circle at 13% 22%, rgba(190, 219, 255, 0.64) 0 1px, transparent 1.6px),
-                radial-gradient(circle at 86% 72%, rgba(154, 236, 216, 0.52) 0 1px, transparent 1.6px),
-                radial-gradient(circle at 68% 16%, rgba(198, 174, 255, 0.48) 0 1px, transparent 1.6px),
-                radial-gradient(circle at 32% 80%, rgba(176, 201, 255, 0.36) 0 1px, transparent 1.5px);
+                radial-gradient(ellipse at var(--pointer-x) var(--pointer-y), rgba(121, 178, 255, 0.18), transparent 38%),
+                radial-gradient(circle at 13% 22%, rgba(190, 219, 255, 0.64) 0, rgba(190, 219, 255, 0.64) 1px, transparent 1.6px),
+                radial-gradient(circle at 86% 72%, rgba(154, 236, 216, 0.52) 0, rgba(154, 236, 216, 0.52) 1px, transparent 1.6px),
+                radial-gradient(circle at 68% 16%, rgba(198, 174, 255, 0.48) 0, rgba(198, 174, 255, 0.48) 1px, transparent 1.6px),
+                radial-gradient(circle at 32% 80%, rgba(176, 201, 255, 0.36) 0, rgba(176, 201, 255, 0.36) 1px, transparent 1.5px);
             background-size: auto, 164px 164px, 228px 228px, 296px 296px, 342px 342px;
             animation: star-shift 21s linear infinite;
             pointer-events: none;
@@ -1285,7 +1286,7 @@
             z-index: 0;
             inset: 0;
             opacity: 0.16;
-            background: repeating-linear-gradient(180deg, transparent 0 5px, rgba(145, 185, 255, 0.18) 6px, transparent 7px 11px);
+            background: repeating-linear-gradient(180deg, transparent 0, transparent 5px, rgba(145, 185, 255, 0.18) 6px, transparent 7px, transparent 11px);
             background-size: 100% 12px;
             animation: scan-flow 8s linear infinite;
             mix-blend-mode: screen;
@@ -1580,6 +1581,186 @@
             0%, 100% { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 7px 18px rgba(0, 0, 0, 0.16); transform: scale(1); }
             50% { box-shadow: 0 0 0 7px rgba(118, 165, 255, 0.08), 0 0 25px rgba(104, 154, 255, 0.42); transform: scale(1.07); }
         }
+
+        /* --- Image attachment system --- */
+        .file-input {
+            display: none !important;
+        }
+
+        .input-wrapper .attachment-trigger {
+            display: grid;
+            min-width: 43px;
+            width: 43px;
+            height: 43px;
+            min-height: 43px;
+            padding: 0;
+            place-items: center;
+            flex: 0 0 auto;
+            border: 1px solid rgba(151, 190, 255, 0.2);
+            border-radius: 14px;
+            background: linear-gradient(145deg, rgba(116, 157, 255, 0.17), rgba(131, 99, 255, 0.1));
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.11), 0 8px 18px rgba(0, 0, 0, 0.13);
+            color: #a9c7ff;
+        }
+
+        .input-wrapper .attachment-trigger::after {
+            display: none;
+        }
+
+        .input-wrapper .attachment-trigger:hover:not(:disabled) {
+            border-color: rgba(145, 190, 255, 0.5);
+            background: linear-gradient(145deg, rgba(125, 171, 255, 0.3), rgba(142, 104, 255, 0.2));
+            box-shadow: 0 0 0 4px rgba(113, 156, 255, 0.08), 0 0 22px rgba(100, 145, 255, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+            color: #e3edff;
+            transform: translateY(-1px) rotate(-3deg);
+        }
+
+        .input-wrapper .attachment-trigger.has-image {
+            border-color: rgba(108, 239, 203, 0.48);
+            background: linear-gradient(145deg, rgba(92, 221, 184, 0.22), rgba(91, 152, 255, 0.16));
+            color: #b1f8e0;
+            box-shadow: 0 0 18px rgba(93, 230, 190, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.16);
+        }
+
+        .attachment-trigger svg {
+            width: 19px;
+            height: 19px;
+            fill: none;
+            stroke: currentColor;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            stroke-width: 1.7;
+        }
+
+        .attachment-preview {
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            width: fit-content;
+            margin: 0 0 8px 2px;
+            padding: 4px;
+            border: 1px solid rgba(139, 184, 255, 0.22);
+            border-radius: 12px;
+            background: rgba(24, 40, 77, 0.72);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            animation: attachment-rise 0.36s cubic-bezier(0.21, 0.81, 0.33, 1) both;
+        }
+
+        .attachment-preview-image {
+            display: block;
+            width: 34px;
+            height: 34px;
+            flex: 0 0 34px;
+            border: 1px solid rgba(210, 228, 255, 0.2);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            background-position: center;
+            background-repeat: no-repeat;
+            background-size: cover;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.18);
+        }
+
+        .remove-attachment {
+            display: grid;
+            width: 30px;
+            height: 30px;
+            padding: 0;
+            place-items: center;
+            flex: 0 0 auto;
+            border: 0;
+            border-radius: 8px;
+            background: transparent;
+            color: #aebbd2;
+            cursor: pointer;
+            transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+        }
+
+        .remove-attachment svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
+
+        .remove-attachment:hover {
+            background: rgba(255, 91, 119, 0.13);
+            color: #ffb4c2;
+            transform: scale(1.06);
+        }
+
+        .message-image-card {
+            position: relative;
+            width: min(360px, 100%);
+            max-width: 100%;
+            margin-top: 9px;
+            padding: 5px;
+            overflow: hidden;
+            border: 1px solid rgba(171, 201, 255, 0.22);
+            border-radius: 17px;
+            background: rgba(255, 255, 255, 0.045);
+            box-shadow: 0 16px 30px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.09);
+        }
+
+        .message-image-card::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.045);
+            pointer-events: none;
+        }
+
+        .message-image {
+            display: block;
+            width: 100%;
+            height: auto;
+            max-height: 320px;
+            object-fit: contain;
+            border-radius: 12px;
+            background: rgba(4, 8, 18, 0.46);
+        }
+
+        .message-image-card.user-thumbnail-card {
+            width: 180px;
+            height: 120px;
+            flex: 0 0 180px;
+        }
+
+        .user-thumbnail-image {
+            width: 100%;
+            height: 100%;
+            border-radius: 12px;
+            background-color: rgba(4, 8, 18, 0.46);
+            background-position: center;
+            background-repeat: no-repeat;
+            background-size: cover;
+        }
+
+        .image-result-label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin: 8px 2px 3px;
+            color: #9fb4d8;
+            font-size: 10px;
+        }
+
+        .image-result-label i {
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background: #6ff0c2;
+            box-shadow: 0 0 8px rgba(111, 240, 194, 0.75);
+        }
+
+        @keyframes attachment-rise {
+            from { opacity: 0; transform: translateY(8px) scale(0.98); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        @media (max-width: 760px) {
+            .attachment-preview { width: 100%; }
+            .input-wrapper { padding-left: 7px; }
+            .input-icon { display: none; }
+            .input-wrapper .attachment-trigger { min-width: 40px; width: 40px; height: 40px; min-height: 40px; }
+            .message-image-card.user-thumbnail-card { width: 150px; height: 100px; flex-basis: 150px; }
+        }
     </style>
 </head>
 <body>
@@ -1652,23 +1833,39 @@
                             <span>{{ msg.role === 'user' ? '你' : '人事小助手' }}</span>
                             <span>{{ msg.role === 'user' ? '已发送' : '知识库回答' }}</span>
                         </div>
-                        <div class="message-content" style="white-space: pre-wrap;">{{ msg.content }}</div>
+                        <div class="message-content" style="white-space: pre-wrap;">{{ stripImageResultMarkers(msg.content) }}</div>
+                        <div v-if="msg.image &amp;&amp; msg.role === 'user'" class="message-image-card user-thumbnail-card">
+                            <div class="user-thumbnail-image"
+                                 :style="{ backgroundImage: 'url(' + msg.image + ')' }"
+                                 role="img" aria-label="用户上传的图片"></div>
+                        </div>
+                        <div v-else-if="msg.image" class="message-image-card">
+                            <div class="image-result-label">
+                                <i></i><span>缺陷检测标注结果</span>
+                            </div>
+                            <img :src="msg.image" class="message-image"
+                                 alt="缺陷检测标注结果">
+                        </div>
                     </div>
                 </div>
 
                 <!-- 原有流式消息占位 -->
-                <div v-if="streamingMessage" class="message assistant">
+                <div v-if="streamingMessage || streamingImage" class="message assistant">
                     <div class="avatar" aria-hidden="true">✦</div>
                     <div class="message-content-wrapper">
                         <div class="message-meta"><span>人事小助手</span><span>正在组织回答</span></div>
-                        <div class="message-content">
+                        <div v-if="streamingMessage" class="message-content">
                             {{ streamingMessage }}<span class="typing-cursor"></span>
+                        </div>
+                        <div v-if="streamingImage" class="message-image-card">
+                            <div class="image-result-label"><i></i><span>缺陷检测标注结果</span></div>
+                            <img :src="streamingImage" class="message-image" alt="缺陷检测标注结果">
                         </div>
                     </div>
                 </div>
 
                 <!-- 原有加载状态 -->
-                <div v-if="loading && !streamingMessage" class="message assistant">
+                <div v-if="loading &amp;&amp; !streamingMessage" class="message assistant">
                     <div class="avatar" aria-hidden="true">✦</div>
                     <div class="typing-indicator" aria-label="正在思考">
                         <span></span><span></span><span></span>
@@ -1677,14 +1874,28 @@
             </section>
 
             <section class="input-area" aria-label="提问区域">
+                <div v-if="uploadedImage" class="attachment-preview">
+                    <div :key="'attachment-preview-' + uploadVersion" class="attachment-preview-image"
+                         :style="{ backgroundImage: 'url(' + uploadedImage + ')' }"
+                         role="img" aria-label="待发送图片预览"></div>
+                    <button type="button" class="remove-attachment" @click="removeImage" :disabled="loading" aria-label="移除图片" title="移除图片">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M9 7l1-3h4l1 3M6.5 7l.7 12h9.6l.7-12"></path></svg>
+                    </button>
+                </div>
                 <div class="input-wrapper">
                     <span class="input-icon" aria-hidden="true">
                         <svg viewBox="0 0 24 24"><path d="M12 19V5M7 10l5-5 5 5M5 19h14"></path></svg>
                     </span>
+                    <button type="button" class="attachment-trigger" :class="{'has-image': uploadedImage}"
+                            @click="triggerImagePicker" :disabled="loading" aria-label="选择图片">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5h11A2.5 2.5 0 0 1 20 7.5v9a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5zM8 10a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zm-3 6 4.2-4.2a1 1 0 0 1 1.4 0l2.1 2.1 1.2-1.2a1 1 0 0 1 1.4 0L19 16.4"></path></svg>
+                    </button>
+                    <input ref="imageInput" class="file-input" type="file"
+                           accept="image/png,image/jpeg,image/webp" @change="handleImageUpload">
                     <input v-model="inputText" @keyup.enter="sendMessage"
-                           placeholder="输入问题，或先输入 /login 你的名字"
+                           placeholder="输入问题、添加图片，或先输入 /login 你的名字"
                            :disabled="loading" aria-label="输入问题" autofocus>
-                    <button type="button" @click="sendMessage" :disabled="loading">
+                    <button type="button" @click="sendMessage" :disabled="loading || (!inputText.trim() &amp;&amp; !uploadedImageData)">
                         {{ loading ? '思考中…' : '发送' }}
                     </button>
                 </div>
@@ -1716,6 +1927,14 @@
         return html;
     }
 
+    function cleanImageResultMarkers(text) {
+        return String(text || '')
+            .replace(/\[(?:IMAGE_RESULT|IAMGE_RESULT)\][\s\S]*?\[\/(?:IMAGE_RESULT|IAMGE_RESULT)\]/g, '')
+            .replace(/\[\/?(?:IMAGE_RESULT|IAMGE_RESULT)\]/g, '')
+            .replace(/\[[A-Z_]*$/g, '')
+            .trimEnd();
+    }
+
     new Vue({
         el: '#app',
         data: {
@@ -1723,7 +1942,13 @@
             currentSessionId: null,
             inputText: '',
             loading: false,
-            streamingMessage: ''
+            streamingMessage: '',
+            streamingImage: '',
+            uploadedImage: null,
+            uploadedImageData: null,
+            uploadedFileName: '',
+            uploadedFileMeta: '',
+            uploadVersion: 0
         },
         computed: {
             currentSession() {
@@ -1740,23 +1965,111 @@
             }
         },
         methods: {
+            triggerImagePicker() {
+                if (!this.loading && this.$refs.imageInput) this.$refs.imageInput.click();
+            },
+            formatFileSize(bytes) {
+                if (bytes < 1024) return `${bytes} B`;
+                if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+                return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+            },
+            createImageThumbnail(dataUrl) {
+                return new Promise((resolve, reject) => {
+                    const image = new Image();
+                    image.onload = () => {
+                        const width = 360;
+                        const height = 240;
+                        const canvas = document.createElement('canvas');
+                        canvas.width = width;
+                        canvas.height = height;
+                        const context = canvas.getContext('2d');
+                        const scale = Math.max(width / image.naturalWidth, height / image.naturalHeight);
+                        const drawWidth = image.naturalWidth * scale;
+                        const drawHeight = image.naturalHeight * scale;
+                        const offsetX = (width - drawWidth) / 2;
+                        const offsetY = (height - drawHeight) / 2;
+                        context.drawImage(image, offsetX, offsetY, drawWidth, drawHeight);
+                        resolve(canvas.toDataURL('image/jpeg', 0.82));
+                    };
+                    image.onerror = reject;
+                    image.src = dataUrl;
+                });
+            },
+            handleImageUpload(event) {
+                const file = event.target.files && event.target.files[0];
+                event.target.value = '';
+                if (!file) return;
+                if (!file.type.startsWith('image/')) {
+                    alert('请选择图片文件');
+                    return;
+                }
+                if (file.size > 10 * 1024 * 1024) {
+                    alert('图片大小不能超过 10MB');
+                    return;
+                }
+                const uploadVersion = ++this.uploadVersion;
+                this.uploadedImage = null;
+                this.uploadedImageData = null;
+                this.uploadedFileName = '';
+                this.uploadedFileMeta = '';
+                const reader = new FileReader();
+                reader.onload = async () => {
+                    const dataUrl = String(reader.result || '');
+                    try {
+                        const thumbnail = await this.createImageThumbnail(dataUrl);
+                        if (uploadVersion !== this.uploadVersion) return;
+                        this.uploadedImage = thumbnail;
+                        this.uploadedImageData = dataUrl.split(',')[1] || '';
+                        this.uploadedFileName = file.name;
+                        this.uploadedFileMeta = this.formatFileSize(file.size);
+                    } catch (error) {
+                        if (uploadVersion !== this.uploadVersion) return;
+                        console.error('生成图片缩略图失败', error);
+                        this.removeImage();
+                        alert('图片预览生成失败，请重新选择');
+                    }
+                };
+                reader.onerror = () => alert('图片读取失败，请重新选择');
+                reader.readAsDataURL(file);
+            },
+            removeImage() {
+                this.uploadVersion += 1;
+                this.uploadedImage = null;
+                this.uploadedImageData = null;
+                this.uploadedFileName = '';
+                this.uploadedFileMeta = '';
+                if (this.$refs.imageInput) this.$refs.imageInput.value = '';
+            },
             getSessionTitle(session) {
                 if (!session) return '人事小助手';
                 const firstUserMsg = session.messages.find(m => m.role === 'user');
                 if (firstUserMsg) {
-                    let title = firstUserMsg.content.slice(0, 30);
-                    return title + (firstUserMsg.content.length > 30 ? '...' : '');
+                    const cleanContent = firstUserMsg.content.replace(/^\/login\s*/i, '').trim();
+                    const titleSource = cleanContent || firstUserMsg.content;
+                    let title = titleSource.slice(0, 30);
+                    return title + (titleSource.length > 30 ? '...' : '');
                 }
                 return session.title;
             },
             formatMessage(content) {
                 return formatMessageContent(content);
             },
+            stripImageResultMarkers(content) {
+                return cleanImageResultMarkers(content);
+            },
             loadSessions() {
                 const saved = localStorage.getItem('hr_assistant_sessions');
                 if (saved) {
                     try {
                         this.sessions = JSON.parse(saved);
+                        this.sessions.forEach(session => {
+                            (session.messages || []).forEach(message => {
+                                if (message.role === 'assistant') {
+                                    message.content = cleanImageResultMarkers(message.content);
+                                }
+                            });
+                        });
+                        localStorage.setItem('hr_assistant_sessions', JSON.stringify(this.sessions));
                         if (this.sessions.length > 0) {
                             this.currentSessionId = this.sessions[0].id;
                         }
@@ -1802,16 +2115,24 @@
             },
             async sendMessage() {
                 const question = this.inputText.trim();
-                if (!question) return;
+                if (!question && !this.uploadedImageData) return;
                 if (!this.currentSession) return;
 
-                const userQuestion = question;
+                const userQuestion = question || '请查看这张图片';
+                const pendingImage = this.uploadedImage;
+                const sendData = {question: userQuestion};
+                if (this.uploadedImageData) {
+                    sendData.image = this.uploadedImageData;
+                    sendData.image_filename = this.uploadedFileName;
+                }
                 this.inputText = '';
+                this.removeImage();
 
                 const userMsg = {
                     id: Date.now(),
                     role: 'user',
-                    content: userQuestion
+                    content: userQuestion,
+                    image: pendingImage
                 };
                 this.currentSession.messages.push(userMsg);
                 this.saveSessions();
@@ -1819,6 +2140,7 @@
 
                 this.loading = true;
                 this.streamingMessage = '';
+                this.streamingImage = '';
                 let accumulatedContent = '';
 
                 try {
@@ -1826,7 +2148,7 @@
                     const response = await fetch('/chat', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({question: userQuestion})
+                        body: JSON.stringify(sendData)
                     });
 
                     if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -1857,15 +2179,24 @@
                                         const assistantMsg = {
                                             id: Date.now() + 1,
                                             role: 'assistant',
-                                            content: accumulatedContent
+                                            content: cleanImageResultMarkers(accumulatedContent),
+                                            image: this.streamingImage || null
                                         };
                                         this.currentSession.messages.push(assistantMsg);
                                         this.saveSessions();
                                         this.streamingMessage = '';
+                                        this.streamingImage = '';
                                     } else if (data.content !== undefined) {
-                                        // 累加内容并更新流式消息显示
-                                        accumulatedContent += data.content;
-                                        this.streamingMessage = accumulatedContent;
+                                        const imageMatch = String(data.content).match(
+                                            /^\[IMAGE_RESULT\](.*?)\[\/IMAGE_RESULT\]$/
+                                        );
+                                        if (imageMatch) {
+                                            this.streamingImage = imageMatch[1];
+                                        } else {
+                                            // 累加文本内容并更新流式消息显示
+                                            accumulatedContent += data.content;
+                                            this.streamingMessage = cleanImageResultMarkers(accumulatedContent);
+                                        }
 
                                         // 每收到一个字符就滚动到底部，实现平滑滚动
                                         this.$nextTick(() => {
@@ -1893,6 +2224,7 @@
                     this.currentSession.messages.push(errorMsg);
                     this.saveSessions();
                     this.streamingMessage = '';
+                    this.streamingImage = '';
                 } finally {
                     this.loading = false;
                     this.scrollToBottom();

@@ -6,6 +6,7 @@ import json
 import os
 import uuid
 from datetime import datetime
+from pathlib import Path
 from typing import Literal
 
 import dashscope
@@ -20,8 +21,9 @@ load_dotenv()
 dashscope.api_key=os.getenv("API_KEY")
 DEFAULT_MODEL=os.getenv("DEFAULT_MODEL")
 
-#标注图保存目录
-ANNOTATED_IMAGE_DIR="./static/annotated"
+#标注图保存目录：与 FastAPI 挂载的 ai_chat/static 保持一致
+BASE_DIR = Path(__file__).resolve().parent
+ANNOTATED_IMAGE_DIR = BASE_DIR / "static" / "annotated"
 
 #确保目录存在
 os.makedirs(ANNOTATED_IMAGE_DIR,exist_ok=True)
@@ -98,7 +100,7 @@ def save_annotated_image(image_base64:str)->str:
         return ""
 
 @tool
-def detect_defect(image_data:bytes)->str:
+def detect_defect(image_data:str)->str:
     """
     检测零件图片中的瑕疵。当用户上传零件图片并询问"有没有问题"、"检测一下"时使用
 
@@ -108,44 +110,70 @@ def detect_defect(image_data:bytes)->str:
     Returns：
         检测结果摘要
     """
-    image_bytes=base64.b64decode(image_data)
+    try:
 
-    #构造参数
-    params={
-        "file":("image.jpg",image_bytes,"image/jpeg")
-    }
+        image_bytes=base64.b64decode(image_data)
 
-    #发送请求
-    with httpx.Client(timeout=10.0) as client:
-        response=client.post(DeprecationWarning,files=params)
-        #检测响应是否成功
-        response.raise_for_status()
-        data=response.json()
+        #构造参数
+        params={
+            "file":("image.jpg",image_bytes,"image/jpeg")
+        }
 
-        #提取标注图
-        annotated_image=data.get("annotated_image","")
+        #发送请求
+        with httpx.Client(timeout=10.0) as client:
+            response=client.post(DETECT_API_URL,files=params)
+            #检测响应是否成功
+            response.raise_for_status()
+            data=response.json()
 
-        image_url=""
-        if annotated_image:
-            image_url=save_annotated_image(annotated_image)
-            print(f"标注图已保存:{image_url}")
+            #提取标注图
+            annotated_image=data.get("annotated_image","")
 
-        boxes=data.get("boxes",[]) #缺陷详情
-        num=data.get("num_detections","0") #缺陷数量
+            image_url=""
+            if annotated_image:
+                image_url=save_annotated_image(annotated_image)
+                print(f"标注图已保存:{image_url}")
 
-        if num==0:
-            return "零件表面无瑕疵，检测合格"
-        else:
-            line=[f"检测到{num}处瑕疵:"]
+            boxes=data.get("boxes",[]) #缺陷详情
+            num=int(data.get("num_detections",0) or 0) #缺陷数量
 
-            for i,b in enumerate(boxes,1):
-                name=b.get("class_name_cn") #缺陷名称中文
-                conf=b.get("confidence",0) * 100 #检测可信度百分比
-                line.append(f"    {i}.{name}(置信度 {conf:.1f}%)")
+            if num==0:
+                result_text="零件表面无瑕疵，检测合格"
+            else:
+                line=[f"检测到{num}处瑕疵:"]
+
+                for i,b in enumerate(boxes,1):
+                    name=b.get("class_name_cn") #缺陷名称中文
+                    conf=b.get("confidence",0) * 100 #检测可信度百分比
+                    line.append(f"    {i}.{name}(置信度 {conf:.1f}%)")
+
+                #添加建议
+                high_conf=[b for b in boxes if b.get("confidence",0)>0.5]
+
+                if high_conf:
+                    line.append("\n建议：存在高置信度缺陷，建议重点检查或返工。")
+                else:
+                    line.append("\n建议：缺陷置信度较低，建议人工复核确认。")
+
+                result_text="\n".join(line)
+
+            #返回json格式内容字符串，包含文本和检测图片
+            return json.dumps({
+                "result":result_text,
+                "image_url":image_url
+            },ensure_ascii=False)
+
+    except Exception as e:
+        print(f"调用图片检测工具异常：{e}")
+        return json.dumps({
+            "result":f"检测失败:{str(e)}",
+            "image_url":""
+        },ensure_ascii=False)
 
 #工具列表
 TOOLS=[
-    get_current_datetime
+    get_current_datetime,
+    detect_defect
 ]
 
 def _find_tool(tool_name: str):

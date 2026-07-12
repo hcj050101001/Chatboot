@@ -5,6 +5,7 @@ RAG知识库问答系统 - 支持docs 文件夹多文档检索
     2.创建docs文件夹，讲PDF/WORD/TXT文件放入
     3.首次运行会自动构建知识库
 """
+import json
 import os
 from pathlib import Path
 
@@ -17,8 +18,8 @@ from langchain_community.vectorstores import Chroma
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from ai_chat.chat import _extract_chunk_content
-from ai_chat.chat_muti_user import SessionManager
-from tools import decide_tool,excute_tool
+from ai_chat.chat_muti_user import SessionManager,strip_image_result_markers
+from ai_chat.tools import decide_tool,excute_tool
 
 #加载环境变量
 load_dotenv()
@@ -210,17 +211,43 @@ class RAGAssistant:
 
         return docs
 
-    def chat_stream(self,question,username):
+    def chat_stream(self,question,image_base64,username):
         """基于知识库检索回答问题,并多次响应回答片段"""
 
-        #获取工具使用决策
-        tool_name,params=decide_tool(question)
+        #上传图片时直接进行缺陷检测；纯文本问题再由模型决定是否调用工具
+        if image_base64:
+            tool_name,params="detect_defect",{}
+        else:
+            tool_name,params=decide_tool(question)
+
         tool_result=None
+        image_result_marker=None
 
         if tool_name:
             print(f"调用工具：{tool_name},参数：{params}")
-            tool_result=excute_tool(tool_name,**params)
-            print(f"工具返回:{tool_name}")
+            if tool_name == "detect_defect":
+                if not image_base64:
+                    tool_result="请先上传需要检测的图片"
+                else:
+                    tool_result_json=excute_tool(tool_name,image_data=image_base64)
+                    try:
+                        tool_result_obj=json.loads(tool_result_json)
+                    except (json.JSONDecodeError,TypeError):
+                        tool_result_obj={"result":str(tool_result_json),"image_url":""}
+
+                    result_text=tool_result_obj.get("result","")
+                    image_url=tool_result_obj.get("image_url","")
+                    tool_result=result_text
+
+                    #如果有标注图，通过特殊标记单独传递给前端
+                    if image_url:
+                        image_result_marker=f"[IMAGE_RESULT]{image_url}[/IMAGE_RESULT]"
+            else:
+                tool_result=excute_tool(tool_name,**(params or {}))
+            print(f"工具返回：{tool_result}")
+
+        if image_result_marker:
+            yield image_result_marker
 
         tool_info=f"\n【工具调用结果】\n{tool_result}\n" if tool_result else ""
 
@@ -273,14 +300,18 @@ class RAGAssistant:
             for response in responses:
                 if response.status_code == 200:
                     result = _extract_chunk_content(response)
-                    yield result
-                    #拼接完整内容
-                    full_answer += result
+                    if result:
+                        result=strip_image_result_markers(result)
+                    if result:
+                        yield result
+                        #拼接完整内容
+                        full_answer += result
                 else:
                     yield f"错误: {response.status_code} - {response.message}"
 
             if full_answer:
                 #添加回答到对话历史并持久化保存
+                full_answer=strip_image_result_markers(full_answer)
                 session.add_chat_history("assistant",full_answer)
                 self.session_manager.save_to_file()
             else:
@@ -394,7 +425,9 @@ def main():
                 continue
 
             print("AI助手：")
-            assistant.chat(user_input,current_user)
+            for chunk in assistant.chat_stream(user_input, "", current_user):
+                if chunk:
+                    print(chunk, end="", flush=True)
             print()
 
         except EOFError:

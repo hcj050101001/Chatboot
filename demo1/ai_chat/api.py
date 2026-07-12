@@ -65,6 +65,11 @@ async def chat_stream(request:Request):
     if not question:
         raise HTTPException(status_code=400,detail="问题不能为空")
 
+    image_base64=body.get("image","")
+
+    if not question and not image_base64:
+        return {"error":"问题或图片不能为空"}
+
     if not current_user:
         if question.startswith("/login"):
             current_user=question[7:].strip()
@@ -81,7 +86,7 @@ async def chat_stream(request:Request):
     def generation():
         chunk_count=0
         try:
-            for chunk in assistant.chat_stream(question,current_user):
+            for chunk in assistant.chat_stream(question,image_base64,current_user):
                 if chunk is None:
                     continue
                 chunk_count+=1

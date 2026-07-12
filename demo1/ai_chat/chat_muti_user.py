@@ -5,6 +5,7 @@
 """
 import json
 import os
+import re
 import uuid
 from datetime import datetime
 
@@ -25,10 +26,28 @@ DEFAULT_MODEL=os.getenv("DEFAULT_MODEL")
 #工具的回答 Tool_Message
 
 #设置System_Message
-SYSTEM_MESSAGE="你是一个公司的HR"
+SYSTEM_MESSAGE="""
+        你是公司的智能问答小助手.
+        主要回答请假，入职，离职，考勤，薪资等人事问题。
+        可以参考知识库中的内容,或者调用工具进行回答。
+        不要在回答中输出IMAGE_RESULT标记或图片路径，检测标注图由系统单独展示。
+"""
 
 #持久化存储用户对话记忆的文件名称路径
 STORAGE_LIFE="session.json"
+
+def strip_image_result_markers(content):
+    """移除历史或模型回答中残留的内部图片标记。"""
+    if not isinstance(content,str):
+        return content
+
+    content=re.sub(
+        r"\[(?:IMAGE_RESULT|IAMGE_RESULT)\][\s\S]*?\[/(?:IMAGE_RESULT|IAMGE_RESULT)\]",
+        "",
+        content,
+    )
+    content=re.sub(r"\[/?(?:IMAGE_RESULT|IAMGE_RESULT)\]","",content)
+    return content.rstrip()
 
 def _extract_chunk_content(response):
     """安全提取流式响应里的文本片段。"""
@@ -94,6 +113,13 @@ class Session:
         session.created_at = datetime.fromisoformat(data["create_at"])
         session.last_active = datetime.fromisoformat(data["last_active"])
         session.chat_history = data["chat_history"]
+        for message in session.chat_history:
+            if message.get("role") == "system":
+                message["content"] = SYSTEM_MESSAGE
+            elif message.get("role") == "assistant":
+                message["content"] = strip_image_result_markers(
+                    message.get("content","")
+                )
 
         return session
 
