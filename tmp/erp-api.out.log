@@ -1,2 +1,2 @@
-INFO:     127.0.0.1:62747 - "GET / HTTP/1.1" 307 Temporary Redirect
-INFO:     127.0.0.1:62747 - "GET /static/chat.html HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62332 - "GET / HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:62332 - "GET /static/chat.html HTTP/1.1" 200 OK

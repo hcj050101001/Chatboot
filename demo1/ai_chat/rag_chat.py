@@ -7,6 +7,7 @@ RAG知识库问答系统 - 支持docs 文件夹多文档检索
 """
 import json
 import os
+import re
 from pathlib import Path
 
 import dashscope
@@ -23,13 +24,15 @@ from ai_chat.llm_client import get_llm_model, stream_chat
 #加载环境变量
 load_dotenv()
 
-dashscope.api_key=os.getenv("DASHSCOPE_API_KEY")
+# LLM 使用 LLM_API_KEY；embedding 优先使用独立 DashScope Key，兼容旧 API_KEY 配置。
+dashscope.api_key=os.getenv("DASHSCOPE_API_KEY") or os.getenv("API_KEY")
 EL_MODEL=os.getenv("EL_MODEL") #向量模型
 
 #路径配置：始终以当前脚本所在目录为准，避免受启动目录影响
 BASE_DIR = Path(__file__).resolve().parent
 DOCS_DIR = str(BASE_DIR / "docs")
-VECTOR_DB_PATH = str(BASE_DIR / "chroma_db")
+# v4 向量维度与旧 text-embedding-v1 不兼容，使用独立目录保留旧库以便回退。
+VECTOR_DB_PATH = str(BASE_DIR / "chroma_db_v4")
 
 #支持的文档加载器
 LOADER_MAPPING={
@@ -39,7 +42,13 @@ LOADER_MAPPING={
 }
 
 #设置System_Message
-SYSTEM_MESSAGE="你是制造企业的智能ERP助手，负责回答采购订单、库存、生产工单、销售合同及ERP操作流程问题。数据查询必须依据工具结果；流程问题依据知识库文档，不确定时明确说明。"
+SYSTEM_MESSAGE="你是智能小助手，负责公司制度与流程问答、ERP 数据查询和已注册的图片检测等功能。制度问题必须严格依据检索到的文档原文；文档未明确说明时必须说明“当前文档未明确说明”，禁止补充法律标准、行业惯例或猜测。数据问题必须依据工具结果。输出使用清晰中文纯文本，不使用 #、**、反引号或表格符号；多条记录必须分块展示，每个字段单独一行。"
+
+
+def _append_verified_source(answer: str, source_label: str) -> str:
+    """移除模型自行生成的来源行，追加由系统确定的真实来源。"""
+    answer=re.sub(r"\s*数据来源\s*[：:].*$", "", answer, flags=re.IGNORECASE | re.DOTALL)
+    return f"{answer.rstrip()}\n\n数据来源：{source_label}"
 
 class RAGAssistant:
     """基于知识库的问答助手 - 支持多文档"""
@@ -271,8 +280,12 @@ class RAGAssistant:
         #获取当前用户会话
         session=self.session_manager.get_or_create(username)
 
-        #通过问题检索文档
-        docs=self.search_documents(question)
+        # 数据工具已给出事实结果时，不混入无关知识库片段，避免误导来源和回答。
+        docs=[] if tool_result else self.search_documents(question)
+
+        if not tool_result and not docs:
+            yield "当前知识库未检索到可验证的相关内容，无法依据文档确认答案。"
+            return
 
         #将检索到的文档片段添加来源并拼接为字符串
         context_parts=[]
@@ -283,18 +296,34 @@ class RAGAssistant:
             context_parts.append(f"【文档片段{i} - 来自 《{source}》】 \n {doc.page_content}")
 
         context="\n\n".join(context_parts)
+        source_names=list(dict.fromkeys(
+            doc.metadata.get("source","公司制度文档") for doc in docs
+        ))
+        source_parts=[]
+        if tool_result:
+            source_parts.append("ERP 数据库")
+        elif source_names:
+            source_parts.append("、".join(source_names))
+        source_label="；".join(source_parts)
 
         #构建增强提示词prompt
         user_message=f"""
             {tool_info}
 
-            【ERP知识库文档】
+            【公司知识库文档】
             {context}
 
             【用户问题】
             {question}
 
-            请根据上述文档内容回答，并尽量标注信息来源文件。
+            【输出格式要求】
+            1. 制度或流程问题只能使用“公司知识库文档”中明确出现的事实回答。文档没有明确内容时，直接回答“当前文档未明确说明”，禁止引用外部法律、行业惯例或自行推导。
+            2. 输出中文纯文本，禁止使用 Markdown 符号：#、**、反引号、表格竖线和横线列表。
+            3. 第一行必须是“查询结论：”并用一句话概括。
+            4. 多条记录时，每条记录单独使用“【记录 1】”“【记录 2】”分块；
+               每个字段独占一行，采用“字段名：字段值”的形式，记录之间空一行。
+            5. 金额保留两位小数并标明“元”；日期使用 YYYY-MM-DD。
+            6. 不要自行输出“数据来源”，系统会统一添加真实来源。
         """
 
         # 会话库只保存用户原始问题，避免工具结果和检索片段污染聊天记录。
@@ -306,17 +335,17 @@ class RAGAssistant:
 
         try:
 
-            # 完整回答内容
+            # 收集完整回答后统一校验来源，避免模型伪造来源标签。
             full_answer = ""
             for result in stream_chat(chat_history):
                 result=strip_image_result_markers(result)
                 if result:
-                    yield result
                     full_answer += result
 
             if full_answer:
-                #添加回答到对话历史并持久化保存
                 full_answer=strip_image_result_markers(full_answer)
+                full_answer=_append_verified_source(full_answer,source_label)
+                yield full_answer
                 session.add_chat_history("assistant",full_answer)
                 self.session_manager.save_session(username)
             else:
