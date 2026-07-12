@@ -1,51 +1,32 @@
-INFO:     127.0.0.1:61015 - "GET /static/chat.html HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61015 - "POST /chat HTTP/1.1" 200 OK
-已加载1个用户的会话记录
+INFO:     127.0.0.1:57200 - "POST /chat HTTP/1.1" 200 OK
+已加载2个用户的会话记录
 正在进行向量化...
 知识库加载成功...
-INFO:     127.0.0.1:61015 - "POST /chat HTTP/1.1" 200 OK
-AI工具使用原始返回：{"tool":"query_pending_purchase_orders","params":{"supplier_keyword":"A供应商"}}....
-调用工具：query_pending_purchase_orders,参数：{'supplier_keyword': 'A供应商'}
-工具返回：未完全到货的采购订单：共 2 条记录
-{"采购订单号": "PO202607001", "供应商": "A供应商", "下单日期": "2026-07-01", "预计到货日期": "2026-07-10", "到货状态": "待到货", "订单金额": "39600.00", "商品明细": "工业控制器 x 20.00，已到 0.00；精密轴承 x 60.00，已到 0.00"}
-{"采购订单号": "PO202607002", "供应商": "A供应商", "下单日期": "2026-07-03", "预计到货日期": "2026-07-12", "到货状态": "部分到货", "订单金额": "18000.00", "商品明细": "工业传感器 x 40.00，已到 10.00"}
-为新用户erp_test创建会话
-INFO:     127.0.0.1:64949 - "POST /chat HTTP/1.1" 200 OK
-AI工具使用原始返回：{"tool":"query_pending_purchase_orders","params":{"supplier_keyword":"A供应商"}}....
-调用工具：query_pending_purchase_orders,参数：{'supplier_keyword': 'A供应商'}
-工具返回：未完全到货的采购订单：共 2 条记录
-{"采购订单号": "PO202607001", "供应商": "A供应商", "下单日期": "2026-07-01", "预计到货日期": "2026-07-10", "到货状态": "待到货", "订单金额": "39600.00", "商品明细": "工业控制器 x 20.00，已到 0.00；精密轴承 x 60.00，已到 0.00"}
-{"采购订单号": "PO202607002", "供应商": "A供应商", "下单日期": "2026-07-03", "预计到货日期": "2026-07-12", "到货状态": "部分到货", "订单金额": "18000.00", "商品明细": "工业传感器 x 40.00，已到 10.00"}
-INFO:     127.0.0.1:51763 - "GET /static/chat.html HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61883 - "POST /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57200 - "POST /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54425 - "GET /static/chat.html HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53311 - "GET / HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:53311 - "GET /static/chat.html HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:53311 - "GET /static/annotated/annotated_20260711_162654_f7f1a44e.jpg HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:59786 - "GET /static/annotated/annotated_20260711_162718_a056cc3d.jpg HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:59786 - "GET /favicon.ico HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49559 - "POST /chat HTTP/1.1" 200 OK
 AI工具使用原始返回：{"tool":"none","params":{}}....
-INFO:     127.0.0.1:61883 - "POST /chat HTTP/1.1" 200 OK
-AI工具使用原始返回：{"tool":"query_pending_purchase_orders","params":{"supplier_keyword":"A供应商"}}....
-调用工具：query_pending_purchase_orders,参数：{'supplier_keyword': 'A供应商'}
-工具返回：未完全到货的采购订单：共 2 条记录
-{"采购订单号": "PO202607001", "供应商": "A供应商", "下单日期": "2026-07-01", "预计到货日期": "2026-07-10", "到货状态": "待到货", "订单金额": "39600.00", "商品明细": "工业控制器 x 20.00，已到 0.00；精密轴承 x 60.00，已到 0.00"}
-{"采购订单号": "PO202607002", "供应商": "A供应商", "下单日期": "2026-07-03", "预计到货日期": "2026-07-12", "到货状态": "部分到货", "订单金额": "18000.00", "商品明细": "工业传感器 x 40.00，已到 10.00"}
-INFO:     127.0.0.1:57197 - "POST /chat HTTP/1.1" 200 OK
-AI工具使用原始返回：{"tool":"query_low_stock_products","params":{}}....
-调用工具：query_low_stock_products,参数：{}
-工具返回：库存预警商品：共 3 条记录
-{"商品编号": "PRD002", "商品名称": "精密轴承", "分类": "机械配件", "单位": "套", "当前库存": "45.00", "安全库存": "80.00", "缺口数量": "35.00"}
-{"商品编号": "PRD004", "商品名称": "工业传感器", "分类": "电子元件", "单位": "个", "当前库存": "12.00", "安全库存": "30.00", "缺口数量": "18.00"}
-{"商品编号": "PRD001", "商品名称": "工业控制器", "分类": "电子元件", "单位": "台", "当前库存": "8.00", "安全库存": "20.00", "缺口数量": "12.00"}
-INFO:     127.0.0.1:57197 - "POST /chat HTTP/1.1" 200 OK
-AI工具使用原始返回：{"tool":"query_monthly_top_customer","params":{"month":""}}....
-调用工具：query_monthly_top_customer,参数：{'month': ''}
-工具返回：2026-07 销售额最高客户：共 1 条记录
-{"客户编号": "CUST001", "客户名称": "华东制造有限公司", "销售总额": "41400.00", "完成订单数": 2}
-INFO:     127.0.0.1:49543 - "POST /chat HTTP/1.1" 200 OK
-AI工具使用原始返回：{"tool":"query_monthly_top_customer","params":{"month":"2026-07"}}....
-调用工具：query_monthly_top_customer,参数：{'month': '2026-07'}
-工具返回：2026-07 销售额最高客户：共 1 条记录
-{"客户编号": "CUST001", "客户名称": "华东制造有限公司", "销售总额": "41400.00", "完成订单数": 2}
-INFO:     127.0.0.1:55583 - "POST /chat HTTP/1.1" 200 OK
-AI工具使用原始返回：{"tool":"query_pending_purchase_orders","params":{"supplier_keyword":"A供应商"}}....
-调用工具：query_pending_purchase_orders,参数：{'supplier_keyword': 'A供应商'}
-工具返回：未完全到货的采购订单：共 2 条记录
-{"采购订单号": "PO202607001", "供应商": "A供应商", "下单日期": "2026-07-01", "预计到货日期": "2026-07-10", "到货状态": "待到货", "订单金额": "39600.00", "商品明细": "工业控制器 x 20.00，已到 0.00；精密轴承 x 60.00，已到 0.00"}
-{"采购订单号": "PO202607002", "供应商": "A供应商", "下单日期": "2026-07-03", "预计到货日期": "2026-07-12", "到货状态": "部分到货", "订单金额": "18000.00", "商品明细": "工业传感器 x 40.00，已到 10.00"}
-INFO:     127.0.0.1:51360 - "POST /chat HTTP/1.1" 200 OK
+为新用户security_test创建会话
+INFO:     127.0.0.1:50515 - "POST /chat HTTP/1.1" 200 OK
+AI工具使用原始返回：{"tool":"none","params":{}}....
+INFO:     127.0.0.1:60018 - "POST /chat HTTP/1.1" 200 OK
+AI工具使用原始返回：{"tool":"get_erp_table_schema","params":{"table_name":"products"}}....
+调用工具：get_erp_table_schema,参数：{'table_name': 'products'}
+工具返回：{"表名": "products", "字段": [{"Field": "product_id", "Type": "varchar(20)", "Collation": "utf8mb4_0900_ai_ci", "Null": "NO", "Key": "PRI", "Default": null, "Extra": "", "Privileges": "select,insert,update,references", "Comment": ""}, {"Field": "product_name", "Type": "varchar(100)", "Collation": "utf8mb4_0900_ai_ci", "Null": "NO", "Key": "UNI", "Default": null, "Extra": "", "Privileges": "select,insert,update,references", "Comment": ""}, {"Field": "category", "Type": "varchar(50)", "Collation": "utf8mb4_0900_ai_ci", "Null": "YES", "Key": "", "Default": null, "Extra": "", "Privileges": "select,insert,update,references", "Comment": ""}, {"Field": "unit", "Type": "varchar(20)", "Collation": "utf8mb4_0900_ai_ci", "Null": "NO", "Key": "", "Default": "?", "Extra": "", "Privileges": "select,insert,update,references", "Comment": ""}, {"Field": "current_stock", "Type": "decimal(12,2)", "Collation": null, "Null": "NO", "Key": "", "Default": "0.00", "Extra": "", "Privileges": "select,insert,update,references", "Comment": ""}, {"Field": "safety_stock", "Type": "decimal(12,2)", "Collation": null, "Null": "NO", "Key": "", "Default": "0.00", "Extra": "", "Privileges": "select,insert,update,references", "Comment": ""}, {"Field": "unit_price", "Type": "decimal(12,2)", "Collation": null, "Null": "NO", "Key": "", "Default": "0.00", "Extra": "", "Privileges": "select,insert,update,references", "Comment": ""}, {"Field": "status", "Type": "varchar(20)", "Collation": "utf8mb4_0900_ai_ci", "Null": "NO", "Key": "", "Default": "??", "Extra": "", "Privileges": "select,insert,update,references", "Comment": ""}], "索引": [{"Table": "products", "Non_unique": 0, "Key_name": "PRIMARY", "Seq_in_index": 1, "Column_name": "product_id", "Collation": "A", "Cardinality": 4, "Sub_part": null, "Packed": null, "Null": "", "Index_type": "BTREE", "Comment": "", "Index_comment": "", "Visible": "YES", "Expression": null}, {"Table": "products", "Non_unique": 0, "Key_name": "uk_product_name", "Seq_in_index": 1, "Column_name": "product_name", "Collation": "A", "Cardinality": 4, "Sub_part": null, "Packed": null, "Null": "", "Index_type": "BTREE", "Comment": "", "Index_comment": "", "Visible": "YES", "Expression": null}]}
+INFO:     127.0.0.1:63589 - "POST /chat HTTP/1.1" 200 OK
+AI工具使用原始返回：{"tool":"get_erp_table_schema","params":{"table_name":"purchase_orders"}}....
+调用工具：get_erp_table_schema,参数：{'table_name': 'purchase_orders'}
+工具返回：{"表名": "purchase_orders", "字段": [{"Field": "purchase_order_id", "Type": "varchar(30)", "Collation": "utf8mb4_0900_ai_ci", "Null": "NO", "Key": "PRI", "Default": null, "Extra": "", "Privileges": "select,insert,update,references", "Comment": ""}, {"Field": "supplier_id", "Type": "varchar(20)", "Collation": "utf8mb4_0900_ai_ci", "Null": "NO", "Key": "MUL", "Default": null, "Extra": "", "Privileges": "select,insert,update,references", "Comment": ""}, {"Field": "order_date", "Type": "date", "Collation": null, "Null": "NO", "Key": "", "Default": null, "Extra": "", "Privileges": "select,insert,update,references", "Comment": ""}, {"Field": "expected_arrival_date", "Type": "date", "Collation": null, "Null": "YES", "Key": "", "Default": null, "Extra": "", "Privileges": "select,insert,update,references", "Comment": ""}, {"Field": "actual_arrival_date", "Type": "date", "Collation": null, "Null": "YES", "Key": "", "Default": null, "Extra": "", "Privileges": "select,insert,update,references", "Comment": ""}, {"Field": "order_status", "Type": "varchar(20)", "Collation": "utf8mb4_0900_ai_ci", "Null": "NO", "Key": "", "Default": "???", "Extra": "", "Privileges": "select,insert,update,references", "Comment": ""}, {"Field": "total_amount", "Type": "decimal(14,2)", "Collation": null, "Null": "NO", "Key": "", "Default": "0.00", "Extra": "", "Privileges": "select,insert,update,references", "Comment": ""}], "索引": [{"Table": "purchase_orders", "Non_unique": 0, "Key_name": "PRIMARY", "Seq_in_index": 1, "Column_name": "purchase_order_id", "Collation": "A", "Cardinality": 3, "Sub_part": null, "Packed": null, "Null": "", "Index_type": "BTREE", "Comment": "", "Index_comment": "", "Visible": "YES", "Expression": null}, {"Table": "purchase_orders", "Non_unique": 1, "Key_name": "idx_po_supplier_status", "Seq_in_index": 1, "Column_name": "supplier_id", "Collation": "A", "Cardinality": 2, "Sub_part": null, "Packed": null, "Null": "", "Index_type": "BTREE", "Comment": "", "Index_comment": "", "Visible": "YES", "Expression": null}, {"Table": "purchase_orders", "Non_unique": 1, "Key_name": "idx_po_supplier_status", "Seq_in_index": 2, "Column_name": "order_status", "Collation": "A", "Cardinality": 3, "Sub_part": null, "Packed": null, "Null": "", "Index_type": "BTREE", "Comment": "", "Index_comment": "", "Visible": "YES", "Expression": null}]}
+INFO:     127.0.0.1:54075 - "POST /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56229 - "POST /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52631 - "POST /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52631 - "POST /chat HTTP/1.1" 200 OK
+AI工具使用原始返回：{"tool":"none","params":{}}....
+INFO:     127.0.0.1:52336 - "POST /chat HTTP/1.1" 200 OK
+AI工具使用原始返回：{"tool":"none","params":{}}....
+INFO:     127.0.0.1:62361 - "POST /chat HTTP/1.1" 200 OK

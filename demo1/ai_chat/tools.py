@@ -34,6 +34,82 @@ DB_CONFIG = {
     "charset": "utf8mb4",
 }
 
+# 仅允许查看这些 ERP 表的结构；表名属于 SQL 标识符，不能使用参数占位符，
+# 因此必须通过白名单校验后才会拼接到 SHOW 语句中。
+ERP_TABLES = frozenset({
+    "suppliers",
+    "products",
+    "purchase_orders",
+    "purchase_order_items",
+    "customers",
+    "sales_orders",
+    "sales_order_items",
+    "production_orders",
+})
+
+
+class SensitiveDataGuardrail:
+    """识别不应通过智能助手检索或暴露的敏感信息请求。"""
+
+    _PATTERNS = (
+        r"薪资|工资|绩效奖金|工资单",
+        r"身份证|身份证号|银行卡|银行账户|开户行",
+        r"密码|口令|密钥|api[ _-]?key|access[ _-]?token|secret",
+        r"手机号|手机号码|家庭住址|住址|个人邮箱",
+    )
+
+    @classmethod
+    def validate(cls, question: str) -> tuple[bool, str]:
+        for pattern in cls._PATTERNS:
+            if re.search(pattern, question, flags=re.IGNORECASE):
+                return False, "该请求可能涉及个人或系统敏感信息，已拒绝处理"
+        return True, ""
+
+
+class InputGuardrail:
+    """在模型和数据库调用前拦截恶意、危险或超长输入。"""
+
+    MAX_QUESTION_LENGTH = 1000
+    _PROMPT_INJECTION_PATTERNS = (
+        r"忽略.{0,20}(之前|以上|所有).{0,20}(指令|规则)",
+        r"无视.{0,20}(指令|规则)",
+        r"(system|developer)\s*(prompt|message|instruction)",
+        r"提示词注入|越狱|jailbreak",
+    )
+    _DANGEROUS_SQL_PATTERNS = (
+        r"\binsert\s+into\b|\bupdate\s+\w+\s+set\b|\bdelete\s+from\b",
+        r"\bdrop\s+(table|database)\b|\balter\s+table\b|\btruncate\s+table\b",
+        r"\bcreate\s+(table|database|user)\b|\bgrant\s+\w+|\brevoke\s+\w+|\breplace\s+into\b",
+        r"\b(load\s+data|into\s+outfile)\b",
+        r";\s*(insert\s+into|update\s+\w+\s+set|delete\s+from|drop\s+(table|database)|alter\s+table|truncate\s+table|create\s+(table|database|user)|grant\s+\w+|revoke\s+\w+)\b",
+    )
+    _SCRIPT_PATTERNS = (r"<\s*script\b", r"javascript\s*:", r"onerror\s*=")
+
+    @classmethod
+    def validate(cls, question: str) -> tuple[bool, str]:
+        if not isinstance(question, str):
+            return False, "请求内容必须是文本"
+
+        cleaned_question = question.strip()
+        if not cleaned_question:
+            return False, "请求内容不能为空"
+        if len(cleaned_question) > cls.MAX_QUESTION_LENGTH:
+            return False, f"请求内容不能超过 {cls.MAX_QUESTION_LENGTH} 个字符"
+
+        for pattern in cls._PROMPT_INJECTION_PATTERNS:
+            if re.search(pattern, cleaned_question, flags=re.IGNORECASE):
+                return False, "检测到提示词注入或绕过规则的内容"
+
+        for pattern in cls._DANGEROUS_SQL_PATTERNS:
+            if re.search(pattern, cleaned_question, flags=re.IGNORECASE):
+                return False, "仅允许只读查询，禁止提交修改数据库的 SQL 指令"
+
+        for pattern in cls._SCRIPT_PATTERNS:
+            if re.search(pattern, cleaned_question, flags=re.IGNORECASE):
+                return False, "检测到潜在脚本注入内容"
+
+        return SensitiveDataGuardrail.validate(cleaned_question)
+
 
 def get_db_connection():
     """获取 MySQL 数据库连接。"""
@@ -243,6 +319,150 @@ def query_monthly_top_customer(month: str = "") -> str:
         if conn:
             conn.close()
 
+
+@tool
+def get_erp_table_schema(table_name: str) -> str:
+    """
+    查看 ERP 数据表的字段、类型、注释和索引。
+    当用户询问“products 表有哪些字段”“查看采购订单表结构”时使用。
+
+    Args:
+        table_name: 表名。仅支持 suppliers、products、purchase_orders、
+            purchase_order_items、customers、sales_orders、sales_order_items、production_orders。
+    """
+    table_name = table_name.strip().lower()
+    if table_name not in ERP_TABLES:
+        supported_tables = ", ".join(sorted(ERP_TABLES))
+        return f"不支持查看该表。可查看的 ERP 表：{supported_tables}"
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(pymysql.cursors.DictCursor) as cursor:
+            cursor.execute(f"SHOW FULL COLUMNS FROM `{table_name}`")
+            columns = cursor.fetchall()
+            cursor.execute(f"SHOW INDEX FROM `{table_name}`")
+            indexes = cursor.fetchall()
+
+        return json.dumps(
+            {"表名": table_name, "字段": columns, "索引": indexes},
+            ensure_ascii=False,
+            default=str,
+        )
+    except Exception as error:
+        print(f"查看表结构失败：{error}")
+        return "查看表结构失败，请检查 ERP 数据库配置或稍后重试"
+    finally:
+        if conn:
+            conn.close()
+
+
+@tool
+def query_erp_statistics(
+    statistic_type: Literal[
+        "purchase_summary",
+        "inventory_summary",
+        "sales_summary",
+        "production_summary",
+    ],
+    month: str = "",
+) -> str:
+    """
+    执行 ERP 固定统计查询，支持采购、库存、销售和生产统计。
+    当用户询问“本月销售统计”“本月采购统计”“库存汇总”“生产工单统计”时使用。
+
+    Args:
+        statistic_type: 统计类型：purchase_summary（采购）、inventory_summary（库存）、
+            sales_summary（销售）、production_summary（生产）。
+        month: 采购或销售统计月份，格式 YYYY-MM；为空时使用当前月份。
+    """
+    if statistic_type not in {
+        "purchase_summary",
+        "inventory_summary",
+        "sales_summary",
+        "production_summary",
+    }:
+        return "不支持的统计类型"
+
+    month = month.strip() or date.today().strftime("%Y-%m")
+    if statistic_type in {"purchase_summary", "sales_summary"} and not re.fullmatch(
+        r"\d{4}-\d{2}", month
+    ):
+        return "月份格式应为 YYYY-MM，例如 2026-07"
+
+    statistics = {
+        "purchase_summary": (
+            f"{month} 采购订单统计",
+            """
+            SELECT
+                COUNT(*) AS 采购订单数,
+                COALESCE(SUM(total_amount), 0) AS 采购总金额,
+                SUM(order_status = '待到货') AS 待到货订单数,
+                SUM(order_status = '部分到货') AS 部分到货订单数,
+                SUM(order_status = '已到货') AS 已到货订单数
+            FROM purchase_orders
+            WHERE DATE_FORMAT(order_date, '%%Y-%%m') = %s
+            """,
+            (month,),
+        ),
+        "inventory_summary": (
+            "库存汇总统计",
+            """
+            SELECT
+                COUNT(*) AS 商品总数,
+                SUM(current_stock < safety_stock) AS 预警商品数,
+                COALESCE(SUM(current_stock), 0) AS 当前库存总量,
+                COALESCE(SUM(safety_stock), 0) AS 安全库存总量,
+                COALESCE(SUM((safety_stock - current_stock) * (current_stock < safety_stock)), 0) AS 预警缺口总量
+            FROM products
+            """,
+            (),
+        ),
+        "sales_summary": (
+            f"{month} 销售统计",
+            """
+            SELECT
+                COUNT(*) AS 完成订单数,
+                COUNT(DISTINCT customer_id) AS 成交客户数,
+                COALESCE(SUM(total_amount), 0) AS 销售总额,
+                COALESCE(AVG(total_amount), 0) AS 平均订单金额
+            FROM sales_orders
+            WHERE DATE_FORMAT(order_date, '%%Y-%%m') = %s
+              AND order_status = '已完成'
+            """,
+            (month,),
+        ),
+        "production_summary": (
+            "生产工单统计",
+            """
+            SELECT
+                COUNT(*) AS 工单总数,
+                SUM(production_status = '计划中') AS 计划中工单数,
+                SUM(production_status = '生产中') AS 生产中工单数,
+                SUM(production_status = '已完成') AS 已完成工单数,
+                COALESCE(SUM(planned_quantity), 0) AS 计划生产总量,
+                COALESCE(SUM(completed_quantity), 0) AS 已完成总量
+            FROM production_orders
+            """,
+            (),
+        ),
+    }
+
+    title, sql, params = statistics[statistic_type]
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(pymysql.cursors.DictCursor) as cursor:
+            cursor.execute(sql, params)
+            results = cursor.fetchall()
+        return _format_query_results(title, results)
+    except Exception as error:
+        print(f"执行 ERP 统计查询失败：{error}")
+        return "执行 ERP 统计查询失败，请检查 ERP 数据库配置或稍后重试"
+    finally:
+        if conn:
+            conn.close()
+
 def save_annotated_image(image_base64:str)->str:
     """
     将base标注图保存为本地文件，返回访问的URL
@@ -348,6 +568,8 @@ TOOLS=[
     query_pending_purchase_orders,     # 查询指定供应商未完全到货的采购订单
     query_low_stock_products,          # 查询当前库存低于安全库存的商品
     query_monthly_top_customer,        # 查询指定月份销售额最高的客户
+    get_erp_table_schema,              # 查看指定 ERP 数据表的字段和索引
+    query_erp_statistics,              # 执行采购、库存、销售或生产汇总统计
     detect_defect                      # 检测上传的零件图片是否存在瑕疵
 ]
 
@@ -444,9 +666,9 @@ def decide_tool(question:str)->tuple:
         规则：
         1.只选择一个最相关的工具
         2.参数从用户问题中提取
-        3.采购订单未到货、库存预警、销售统计等 ERP 数据问题必须选择最匹配的查询工具
+        3.采购订单未到货、库存预警、销售统计、生产统计、查看表结构等 ERP 数据问题必须选择最匹配的查询工具
         4.ERP 操作流程、配置说明等文档知识问题不要调用数据库工具
-        4.只输出纯JSON，不要有任何解释
+        5.只输出纯JSON，不要有任何解释
     """
 
     response=Generation.call(

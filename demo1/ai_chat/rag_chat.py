@@ -19,7 +19,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from ai_chat.chat import _extract_chunk_content
 from ai_chat.chat_muti_user import SessionManager,strip_image_result_markers
-from ai_chat.tools import decide_tool,excute_tool
+from ai_chat.tools import InputGuardrail, decide_tool,excute_tool
 
 #加载环境变量
 load_dotenv()
@@ -213,6 +213,11 @@ class RAGAssistant:
 
     def chat_stream(self,question,image_base64,username):
         """基于知识库检索回答问题,并多次响应回答片段"""
+
+        is_safe, rejection_reason = InputGuardrail.validate(question)
+        if not is_safe:
+            yield f"请求已拒绝：{rejection_reason}"
+            return
 
         #上传图片时直接进行缺陷检测；纯文本问题再由模型决定是否调用工具
         if image_base64:
