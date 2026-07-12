@@ -10,22 +10,20 @@ import os
 from pathlib import Path
 
 import dashscope
-from dashscope import Generation
 from dotenv import load_dotenv
 from langchain_community.document_loaders import PyPDFLoader, TextLoader, Docx2txtLoader
 from langchain_community.embeddings import DashScopeEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from ai_chat.chat import _extract_chunk_content
 from ai_chat.chat_muti_user import SessionManager,strip_image_result_markers
 from ai_chat.tools import InputGuardrail, decide_tool,excute_tool
+from ai_chat.llm_client import get_llm_model, stream_chat
 
 #加载环境变量
 load_dotenv()
 
-dashscope.api_key=os.getenv("API_KEY")
-DEFAULT_MODEL=os.getenv("DEFAULT_MODEL") #对话模型
+dashscope.api_key=os.getenv("DASHSCOPE_API_KEY")
 EL_MODEL=os.getenv("EL_MODEL") #向量模型
 
 #路径配置：始终以当前脚本所在目录为准，避免受启动目录影响
@@ -40,19 +38,17 @@ LOADER_MAPPING={
     ".docx":Docx2txtLoader
 }
 
-RAG_STORAGE_FILE = str(BASE_DIR / "rag_session.json")
-
 #设置System_Message
 SYSTEM_MESSAGE="你是制造企业的智能ERP助手，负责回答采购订单、库存、生产工单、销售合同及ERP操作流程问题。数据查询必须依据工具结果；流程问题依据知识库文档，不确定时明确说明。"
 
 class RAGAssistant:
     """基于知识库的问答助手 - 支持多文档"""
-    def __init__(self,docs_dir=DOCS_DIR,db_path=VECTOR_DB_PATH,storage_file=RAG_STORAGE_FILE):
+    def __init__(self,docs_dir=DOCS_DIR,db_path=VECTOR_DB_PATH):
         self.docs_dir=docs_dir
         self.file_list=[] #记录已经加载的文档
         self.db_path=db_path #向量存放路径
         self.vectorstore=None #用于后续存储向量数据库对象
-        self.session_manager=SessionManager(storage_file)
+        self.session_manager=SessionManager()
 
     def get_all_documents(self):
 
@@ -113,6 +109,10 @@ class RAGAssistant:
     def build_knowledge_base(self):
         """构建向量知识库"""
 
+        if not dashscope.api_key or not EL_MODEL:
+            print("未配置 DASHSCOPE_API_KEY 或 EL_MODEL，无法构建 ERP 知识库")
+            return False
+
         #所有文档块
         documents=self.get_all_documents()
 
@@ -161,6 +161,11 @@ class RAGAssistant:
     def load_knowledge_base(self):
         """加载已经构建的知识库"""
 
+        if not dashscope.api_key or not EL_MODEL:
+            print("未配置 DashScope embedding；ERP 数据查询可用，知识库检索暂时跳过")
+            self.vectorstore=None
+            return True
+
         # 构建向量化对象
         print("正在进行向量化...")
         embeddings = DashScopeEmbeddings(
@@ -180,6 +185,10 @@ class RAGAssistant:
 
     def init(self):
         """知识库初始化，是构建还是加载"""
+        if not dashscope.api_key or not EL_MODEL:
+            print("未配置 DashScope embedding；以数据库查询模式启动")
+            self.vectorstore=None
+            return True
         if not os.path.exists(self.db_path) or not os.listdir(self.db_path):
             return self.build_knowledge_base()
         else:
@@ -206,6 +215,9 @@ class RAGAssistant:
         Returns：
             检索出的相似片段列表
         """
+
+        if self.vectorstore is None:
+            return []
 
         docs=self.vectorstore.similarity_search(question,k=k)
 
@@ -285,41 +297,28 @@ class RAGAssistant:
             请根据上述文档内容回答，并尽量标注信息来源文件。
         """
 
-        #添加增强提示词到对话历史
-        session.add_chat_history("user",user_message)
+        # 会话库只保存用户原始问题，避免工具结果和检索片段污染聊天记录。
+        session.add_chat_history("user",question)
 
-        #获取用户的对话历史
+        # 历史轮次使用原始问题；仅本轮替换为增强提示词后再发送给模型。
         chat_history=session.get_history(max_turns=5)
+        chat_history[-1] = {"role":"user","content":user_message}
 
         try:
 
-            responses = Generation.call(
-                model=DEFAULT_MODEL,  # 模型名称
-                messages=chat_history,  # 对话参数
-                result_format="message",
-                stream=True,  # 开启流式输出
-                incremental_output=True  # 增量输出
-            )
-
             # 完整回答内容
             full_answer = ""
-            for response in responses:
-                if response.status_code == 200:
-                    result = _extract_chunk_content(response)
-                    if result:
-                        result=strip_image_result_markers(result)
-                    if result:
-                        yield result
-                        #拼接完整内容
-                        full_answer += result
-                else:
-                    yield f"错误: {response.status_code} - {response.message}"
+            for result in stream_chat(chat_history):
+                result=strip_image_result_markers(result)
+                if result:
+                    yield result
+                    full_answer += result
 
             if full_answer:
                 #添加回答到对话历史并持久化保存
                 full_answer=strip_image_result_markers(full_answer)
                 session.add_chat_history("assistant",full_answer)
-                self.session_manager.save_to_file()
+                self.session_manager.save_session(username)
             else:
                 yield "未收到可用的模型回复内容"
 
@@ -346,13 +345,10 @@ class RAGAssistant:
 
 def main():
     """启动知识库问答命令行。"""
-    if not dashscope.api_key:
-        print("错误：未找到API KEY")
-        print("请确保 .env 文件包含 API_KEY=sk-xxx")
-        return
-
-    if not DEFAULT_MODEL or not EL_MODEL:
-        print("错误：未找到 DEFAULT_MODEL 或 EL_MODEL 配置")
+    try:
+        get_llm_model()
+    except RuntimeError as error:
+        print(f"错误：{error}")
         return
 
     assistant = RAGAssistant()
@@ -443,7 +439,7 @@ def main():
 
 assistant=None
 
-def get_assistant(storage_file):
+def get_assistant():
 
     """返回RagAssistant的单例对象"""
 
@@ -451,7 +447,7 @@ def get_assistant(storage_file):
     global assistant
 
     if assistant is None:
-        assistant=RAGAssistant(storage_file=storage_file)
+        assistant=RAGAssistant()
         assistant.init()
 
     return assistant

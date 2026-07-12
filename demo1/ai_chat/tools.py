@@ -10,18 +10,16 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Literal
 
-import dashscope
 import httpx
 import pymysql
-from dashscope import Generation
 from dotenv import load_dotenv
 from langchain_core.tools import tool
 from pydantic import ValidationError
 
+from ai_chat.llm_client import complete_chat
+
 #加载环境变量
 load_dotenv()
-dashscope.api_key=os.getenv("API_KEY")
-DEFAULT_MODEL=os.getenv("DEFAULT_MODEL")
 
 # MySQL 数据库连接配置。连接在调用数据库工具时按需创建，
 # 因此未配置数据库不会影响其他工具和 RAG 问答的启动。
@@ -671,22 +669,10 @@ def decide_tool(question:str)->tuple:
         5.只输出纯JSON，不要有任何解释
     """
 
-    response=Generation.call(
-        model=DEFAULT_MODEL,
-        messages=[{"role":"user","content":prompt}],
-        result_format="message"
-    )
-
-    status_code = getattr(response, "status_code", None)
-    if status_code != 200:
-        message = getattr(response, "message", "未知错误")
-        print(f"AI工具决策请求失败：{status_code} - {message}")
-        return None,None
-
     try:
-        content=response.output.choices[0].message.content
-    except (AttributeError, IndexError, TypeError) as error:
-        print(f"AI工具决策响应格式异常：{error}")
+        content=complete_chat([{"role":"user","content":prompt}],json_mode=True)
+    except Exception as error:
+        print(f"AI工具决策请求失败：{error}")
         return None,None
 
     print(f"AI工具使用原始返回：{content[:200]}....")

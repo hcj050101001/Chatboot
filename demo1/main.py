@@ -1,12 +1,17 @@
-from ai_chat.chat import chat, dashscope
+from ai_chat.chat import chat
+from ai_chat.llm_client import get_llm_model
 
 
 def main():
     """主函数"""
-    if not dashscope.api_key:
-        print("错误：未找到API KEY")
-        print("请确保：1. 存在.env文件 2. .env文件包含API_KEY=sk-xxx")
+    try:
+        model = get_llm_model()
+    except RuntimeError as error:
+        print(f"错误：{error}")
+        print("请确保 .env 包含 LLM_API_KEY、LLM_BASE_URL 和 LLM_MODEL")
         return
+
+    print(f"当前模型：{model}")
 
     while True:
         user_input = input("\n 用户：")

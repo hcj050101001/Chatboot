@@ -3,22 +3,18 @@
 持久化存储对话内容
 基于chat.py进行改造
 """
-import json
 import os
 import re
 import uuid
 from datetime import datetime
 
-import dashscope
-from dashscope import Generation
+import pymysql
 from dotenv import load_dotenv
+
+from ai_chat.llm_client import get_llm_model, stream_chat
 
 #加载环境变量
 load_dotenv()
-
-#配置API_KEY
-dashscope.api_key=os.getenv("API_KEY")
-DEFAULT_MODEL=os.getenv("DEFAULT_MODEL")
 
 #系统提示词 System_Message 规定模型额角色，功能列表，回答风格等
 #用户提问的问题 User_Message
@@ -27,14 +23,11 @@ DEFAULT_MODEL=os.getenv("DEFAULT_MODEL")
 
 #设置System_Message
 SYSTEM_MESSAGE="""
-        你是公司的智能问答小助手.
-        主要回答请假，入职，离职，考勤，薪资等人事问题。
-        可以参考知识库中的内容,或者调用工具进行回答。
+        你是制造企业的智能ERP助手。
+        主要回答采购订单、库存、生产工单、销售合同和ERP操作流程问题。
+        数据问题必须依据工具结果，流程问题可以参考知识库中的内容。
         不要在回答中输出IMAGE_RESULT标记或图片路径，检测标注图由系统单独展示。
 """
-
-#持久化存储用户对话记忆的文件名称路径
-STORAGE_LIFE="session.json"
 
 def strip_image_result_markers(content):
     """移除历史或模型回答中残留的内部图片标记。"""
@@ -48,20 +41,6 @@ def strip_image_result_markers(content):
     )
     content=re.sub(r"\[/?(?:IMAGE_RESULT|IAMGE_RESULT)\]","",content)
     return content.rstrip()
-
-def _extract_chunk_content(response):
-    """安全提取流式响应里的文本片段。"""
-    output = getattr(response, "output", None)
-    choices = getattr(output, "choices", None)
-    if not choices:
-        return None
-
-    first_choice = choices[0]
-    message = getattr(first_choice, "message", None)
-    if not message:
-        return None
-
-    return getattr(message, "content", None)
 
 class Session:
     """单个用户的会话，每个Session对象作为一个对话用户"""
@@ -95,100 +74,190 @@ class Session:
             {"role": "system", "content": SYSTEM_MESSAGE}
         ]
 
-    def to_dict(self):
-        """将对象转换成可以序列化保存的格式"""
-        return{
-            "username":self.username,
-            "session_id":self.session_id,
-            "create_at":self.created_at.isoformat(), #时间日期对象转换为字符串
-            "last_active":self.last_active.isoformat(),
-            "chat_history":self.chat_history
-        }
-
-    @classmethod
-    def from_dict(cls,data):
-        """将文件中读取到的内容转换为Session对象"""
-        session=cls(data["username"])
-        session.session_id=data["session_id"]
-        session.created_at = datetime.fromisoformat(data["create_at"])
-        session.last_active = datetime.fromisoformat(data["last_active"])
-        session.chat_history = data["chat_history"]
-        for message in session.chat_history:
-            if message.get("role") == "system":
-                message["content"] = SYSTEM_MESSAGE
-            elif message.get("role") == "assistant":
-                message["content"] = strip_image_result_markers(
-                    message.get("content","")
-                )
-
-        return session
-
 class SessionManager:
-    """会话管理器，管理所有用户会话"""
+    """会话管理器：缓存活跃会话，并将用户和消息持久化到 MySQL。"""
 
-    def __init__(self,storage_file=STORAGE_LIFE):
-        self.sessions={} #字典：保存用户名和对应的用户对象
-        self.storage_file=storage_file
-        self.load_to_save() #启动时从文件中加载用户会话
+    def __init__(self):
+        self.sessions={}
+        self._ensure_tables()
+
+    @staticmethod
+    def _get_connection():
+        """按需创建 ERP 数据库连接。"""
+        return pymysql.connect(
+            host=os.getenv("DB_HOST", "localhost"),
+            port=int(os.getenv("DB_PORT", "3306")),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
+            charset="utf8mb4",
+        )
+
+    def _ensure_tables(self):
+        """创建 MySQL 会话表和消息表；已有表不会被修改或删除。"""
+        conn=None
+        try:
+            conn=self._get_connection()
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS chat_sessions (
+                        username VARCHAR(100) NOT NULL,
+                        session_id VARCHAR(36) NOT NULL,
+                        created_at DATETIME NOT NULL,
+                        last_active DATETIME NOT NULL,
+                        PRIMARY KEY (username),
+                        KEY idx_chat_sessions_last_active (last_active)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='ERP聊天会话'
+                """)
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS chat_messages (
+                        id BIGINT NOT NULL AUTO_INCREMENT,
+                        username VARCHAR(100) NOT NULL,
+                        role VARCHAR(20) NOT NULL,
+                        content LONGTEXT NOT NULL,
+                        created_at DATETIME NOT NULL,
+                        PRIMARY KEY (id),
+                        KEY idx_chat_messages_username_id (username, id),
+                        CONSTRAINT fk_chat_messages_session
+                            FOREIGN KEY (username) REFERENCES chat_sessions(username)
+                            ON DELETE CASCADE
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='ERP聊天消息'
+                """)
+            conn.commit()
+        except Exception as error:
+            raise RuntimeError(f"初始化 MySQL 会话存储失败：{error}") from error
+        finally:
+            if conn:
+                conn.close()
+
+    def _load_session_from_database(self,username):
+        """从 MySQL 恢复一个用户的会话和历史消息。"""
+        conn=None
+        try:
+            conn=self._get_connection()
+            with conn.cursor(pymysql.cursors.DictCursor) as cursor:
+                cursor.execute(
+                    """SELECT username, session_id, created_at, last_active
+                       FROM chat_sessions WHERE username=%s""",
+                    (username,),
+                )
+                session_row=cursor.fetchone()
+                if not session_row:
+                    return None
+
+                cursor.execute(
+                    """SELECT role, content FROM chat_messages
+                       WHERE username=%s ORDER BY id""",
+                    (username,),
+                )
+                message_rows=cursor.fetchall()
+
+            session=Session(username)
+            session.session_id=session_row["session_id"]
+            session.created_at=session_row["created_at"]
+            session.last_active=session_row["last_active"]
+            session.chat_history=[{"role":"system","content":SYSTEM_MESSAGE}]
+            for message in message_rows:
+                content=message["content"]
+                if message["role"] == "assistant":
+                    content=strip_image_result_markers(content)
+                session.chat_history.append({"role":message["role"],"content":content})
+            return session
+        finally:
+            if conn:
+                conn.close()
+
+    def _save_session_to_database(self,session):
+        """以一个事务写入会话元数据和完整消息历史。"""
+        conn=None
+        try:
+            conn=self._get_connection()
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    INSERT INTO chat_sessions (username, session_id, created_at, last_active)
+                    VALUES (%s,%s,%s,%s)
+                    ON DUPLICATE KEY UPDATE
+                        session_id=VALUES(session_id),
+                        last_active=VALUES(last_active)
+                    """,
+                    (session.username,session.session_id,session.created_at,session.last_active),
+                )
+                cursor.execute("DELETE FROM chat_messages WHERE username=%s",(session.username,))
+                messages=[
+                    (session.username,message["role"],strip_image_result_markers(message["content"]),datetime.now())
+                    for message in session.chat_history
+                    if message.get("role") != "system"
+                ]
+                if messages:
+                    cursor.executemany(
+                        """INSERT INTO chat_messages (username, role, content, created_at)
+                           VALUES (%s,%s,%s,%s)""",
+                        messages,
+                    )
+            conn.commit()
+            return True
+        except Exception as error:
+            if conn:
+                conn.rollback()
+            print(f"MySQL 会话持久化失败：{error}")
+            return False
+        finally:
+            if conn:
+                conn.close()
 
     def get_or_create(self,username):
         """创建或获取用户会话"""
+        username=username.strip()
+        if not username:
+            raise ValueError("用户名不能为空")
+        if len(username) > 100:
+            raise ValueError("用户名不能超过 100 个字符")
+
         if username not in self.sessions:
-            self.sessions[username]=Session(username)
-            print(f"为新用户{username}创建会话")
+            session=self._load_session_from_database(username)
+            if session is None:
+                session=Session(username)
+                print(f"为新用户{username}创建 MySQL 会话")
+            else:
+                print(f"已从 MySQL 恢复用户{username}的会话")
+            self.sessions[username]=session
 
-        #用户之前存在
-        self.sessions[username].last_active=datetime.now()
+        session=self.sessions[username]
+        session.last_active=datetime.now()
+        return session
 
-        return self.sessions[username]
-
-    def save_to_file(self):
-        """保存会话信息到文件（持久化）"""
-        try:
-            data={}
-
-            for username,session in self.sessions.items():
-                data[username]=session.to_dict()
-
-            with open(self.storage_file,"w",encoding="utf-8") as f:
-                json.dump(data,f,ensure_ascii=False,indent=2) #indent=2 格式化缩进
-
-        except Exception as e:
-            print(f"持久化保存会话失败:{e}")
-
-    def load_to_save(self):
-        """从文件中加载json信息"""
-        if not os.path.exists(self.storage_file):
-            return
-
-        try:
-            with open(self.storage_file,"r",encoding="utf-8") as f:
-                data=json.load(f)
-
-            for username,session_data in data.items():
-                self.sessions[username]=Session.from_dict(session_data)
-
-            if self.sessions:
-                print(f"已加载{len(self.sessions)}个用户的会话记录")
-
-        except Exception as e:
-            print(f"会话记录加载失败：{e}")
+    def save_session(self,username):
+        """保存指定用户会话到 MySQL。"""
+        session=self.sessions.get(username)
+        return self._save_session_to_database(session) if session else False
 
     def clear_history(self,username):
         """清空指定用户的对话历史"""
-        if username in self.sessions:
-            self.sessions[username].clear_history()
-            #持久化保存
-            self.save_to_file()
-            return True
-        return False
+        try:
+            session=self.sessions.get(username) or self._load_session_from_database(username)
+            if session is None:
+                return False
+            session.clear_history()
+            session.last_active=datetime.now()
+            self.sessions[username]=session
+            return self.save_session(username)
+        except Exception as error:
+            print(f"清空 MySQL 会话历史失败：{error}")
+            return False
 
     def list_users(self):
         """统计所有用户信息"""
-        return{
-            "total_users":len(self.sessions),
-            "users":self.sessions
-        }
+        conn=None
+        try:
+            conn=self._get_connection()
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT username FROM chat_sessions ORDER BY last_active DESC")
+                users=[row[0] for row in cursor.fetchall()]
+            return {"total_users":len(users),"users":users}
+        finally:
+            if conn:
+                conn.close()
 
 class ChatMultiUser:
 
@@ -222,25 +291,11 @@ class ChatMultiUser:
 
         try:
 
-            responses = Generation.call(
-                model=DEFAULT_MODEL,  # 模型名称
-                messages=history_msg,  # 对话参数
-                result_format="message",
-                stream=True,  # 开启流式输出
-                incremental_output=True  # 增量输出
-            )
-
             # 完整回答内容
             full_answer = ""
-            for response in responses:
-                if response.status_code == 200:
-                    result = _extract_chunk_content(response)
-                    if result:
-                        print(result, end="", flush=True)
-                        # 拼接完整内容
-                        full_answer += result
-                else:
-                    print(f"错误: {response.status_code} - {response.message}")
+            for result in stream_chat(history_msg):
+                print(result, end="", flush=True)
+                full_answer += result
 
             # 只有拿到有效内容时才写入历史
             if full_answer:
@@ -248,20 +303,16 @@ class ChatMultiUser:
             else:
                 print("未收到可用的模型回复内容")
 
-            self.session_manager.save_to_file()
+            self.session_manager.save_session(username)
         except Exception as e:
             print(f"请求失败：{str(e)}")
 
 def main():
     """主函数"""
-    #检查API KEY
-    if not dashscope.api_key:
-        print("错误：未找到API KEY")
-        print("请确保：1. 存在.env文件 2. .env文件包含API_KEY=sk-xxx")
-        return
-    if not DEFAULT_MODEL:
-        print("错误：未找到DEFAULT_MODEL")
-        print("请确保：.env文件包含DEFAULT_MODEL=你的模型名")
+    try:
+        get_llm_model()
+    except RuntimeError as error:
+        print(f"错误：{error}")
         return
 
     #获取多用户对话对象

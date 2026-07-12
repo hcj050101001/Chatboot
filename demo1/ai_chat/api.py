@@ -30,9 +30,6 @@ app.mount("/static",StaticFiles(directory=STATIC_DIR),name="static")
 #当前登录用户
 current_user=None
 
-#用户会话保存的持久化文件名称
-STORAGE_FILE="api_rag_session.json"
-
 def sse_message(content, done=False):
     """构造一条 SSE 数据帧。"""
     data=json.dumps({"content":content,"done":done},ensure_ascii=False)
@@ -70,15 +67,25 @@ async def chat_stream(request:Request):
     if not question and not image_base64:
         return {"error":"问题或图片不能为空"}
 
+    # 无论当前是否已登录，/login 都应切换到指定用户。
+    if question.startswith("/login"):
+        requested_user=question[7:].strip()
+        if not requested_user:
+            return StreamingResponse(
+                complete_message("请在 /login 后提供用户名"),
+                media_type="text/event-stream",
+            )
+        current_user=requested_user
+        return StreamingResponse(
+            complete_message(f"已经登录为：{current_user}"),
+            media_type="text/event-stream",
+        )
+
     if not current_user:
-        if question.startswith("/login"):
-            current_user=question[7:].strip()
-            content=f"已经登录为：{current_user}" if current_user else "请先登录"
-            return StreamingResponse(complete_message(content),media_type="text/event-stream")
         return StreamingResponse(complete_message("请先登录"),media_type="text/event-stream")
 
     try:
-        assistant=get_assistant(STORAGE_FILE)
+        assistant=get_assistant()
     except Exception as error:
         logger.exception("初始化问答助手失败")
         raise HTTPException(status_code=503,detail="问答服务暂时不可用") from error

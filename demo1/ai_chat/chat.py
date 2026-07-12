@@ -1,12 +1,4 @@
-import os
-import dashscope
-from dashscope import Generation
-from dotenv import load_dotenv
-
-load_dotenv()
-
-dashscope.api_key = os.getenv("API_KEY")
-DEFAULT_MODEL = os.getenv("DEFAULT_MODEL")
+from ai_chat.llm_client import get_llm_model, stream_chat
 
 #设置System_Message
 SYSTEM_MESSAGE="你是一个公司的HR"
@@ -21,21 +13,6 @@ def add_chart_history(role,content):
     )
 
 
-def _extract_chunk_content(response):
-    """安全提取流式响应里的文本片段。"""
-    output = getattr(response, "output", None)
-    choices = getattr(output, "choices", None)
-    if not choices:
-        return None
-
-    first_choice = choices[0]
-    message = getattr(first_choice, "message", None)
-    if not message:
-        return None
-
-    return getattr(message, "content", None)
-
-
 #调用方法将系统提示词添加到对话历史
 add_chart_history("system",SYSTEM_MESSAGE)
 
@@ -48,32 +25,15 @@ def chat(prompt, model=None):
     Returns：
         模型回复的文本信息
     """
-    if model is None:
-        model = DEFAULT_MODEL
-
     try:
         #添加用户问题到对话历史
         add_chart_history("user", prompt)
 
-        responses=Generation.call(
-            model=model,  # 模型名称
-            messages=chat_history,  # 对话参数
-            result_format="message",
-            stream=True,  # 开启流式输出
-            incremental_output=True  # 增量输出
-        )
-
         # 完整回答内容
         full_answer = ""
-        for response in responses:
-            if response.status_code == 200:
-                result = _extract_chunk_content(response)
-                if result:
-                    print(result, end="", flush=True)
-                    # 拼接完整内容
-                    full_answer += result
-            else:
-                print(f"错误: {response.status_code} - {response.message}")
+        for result in stream_chat(chat_history):
+            print(result, end="", flush=True)
+            full_answer += result
 
         # 添加AI回复到对话历史
         if full_answer:
@@ -85,10 +45,10 @@ def chat(prompt, model=None):
 
 def main():
     """主函数"""
-    #检查API KEY
-    if not dashscope.api_key:
-        print("错误：未找到API KEY")
-        print("请确保：1. 存在.env文件 2. .env文件包含API_KEY=sk-xxx")
+    try:
+        get_llm_model()
+    except RuntimeError as error:
+        print(f"错误：{error}")
         return
 
     from ai_chat.rag_chat import RAGAssistant
